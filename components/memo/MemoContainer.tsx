@@ -42,8 +42,46 @@ export function MemoContainer() {
 
       if (message.action === 'SCROLL_TO_MEMO') {
         const { memoId } = message.payload as { memoId: string };
-        // メモの位置までスクロール（将来的に実装）
-        logger.debug('Scroll to memo requested', { memoId });
+        // メモを探してその位置までスクロール
+        const targetMemo = memos.find(m => m.id === memoId);
+        if (targetMemo) {
+          const patternId = targetMemo.urlPatterns[0]?.id ?? 'default';
+          const pos = targetMemo.positions[patternId];
+          if (pos) {
+            // pinnedならそのまま、fixedならスクロール位置を考慮
+            const scrollX = pos.pinned ? pos.x - window.innerWidth / 2 : 0;
+            const scrollY = pos.pinned ? pos.y - window.innerHeight / 2 : 0;
+            window.scrollTo({
+              left: Math.max(0, scrollX),
+              top: Math.max(0, scrollY),
+              behavior: 'smooth'
+            });
+            logger.info('Scrolled to memo', { memoId, x: pos.x, y: pos.y });
+          }
+        }
+        sendResponse({ success: true });
+      }
+
+      // メモを左上に移動（呼び出し）
+      if (message.action === 'MOVE_MEMO_TO_VISIBLE') {
+        const { memoId } = message.payload as { memoId: string };
+        const targetMemo = memos.find(m => m.id === memoId);
+        if (targetMemo) {
+          const patternId = targetMemo.urlPatterns[0]?.id ?? 'default';
+          const newPositions = {
+            ...targetMemo.positions,
+            [patternId]: {
+              ...targetMemo.positions[patternId],
+              x: 50,
+              y: 50,
+              pinned: false, // fixedにして画面左上に表示
+            },
+          };
+          const updatedMemo = { ...targetMemo, positions: newPositions, minimized: false };
+          storage.saveMemo(updatedMemo);
+          setMemos((prev) => prev.map((m) => (m.id === memoId ? updatedMemo : m)));
+          logger.info('Memo moved to visible', { memoId });
+        }
         sendResponse({ success: true });
       }
 
@@ -54,7 +92,7 @@ export function MemoContainer() {
     return () => {
       chrome.runtime.onMessage.removeListener(handleMessage);
     };
-  }, []);
+  }, [memos]); // memosを依存配列に追加
 
   const loadMemos = async () => {
     try {

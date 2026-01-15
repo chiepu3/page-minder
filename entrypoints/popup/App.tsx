@@ -119,6 +119,23 @@ function App() {
         }
     }, []);
 
+    // メモを左上に呼び出す
+    const handleRecall = useCallback(async (memoId: string) => {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab?.id) {
+                await chrome.tabs.sendMessage(tab.id, {
+                    action: 'MOVE_MEMO_TO_VISIBLE',
+                    payload: { memoId },
+                });
+            }
+            // ポップアップを閉じる
+            window.close();
+        } catch (err) {
+            console.error('Failed to recall memo:', err);
+        }
+    }, []);
+
     // 全体設定ページを開く
     const handleOpenSettings = useCallback(() => {
         chrome.runtime.openOptionsPage();
@@ -139,7 +156,7 @@ function App() {
                 ) : error ? (
                     <div className="popup-error">{error}</div>
                 ) : (
-                    <MemoList memos={memos} onJump={handleJump} />
+                    <MemoList memos={memos} onJump={handleJump} onRecall={handleRecall} />
                 )}
             </main>
 

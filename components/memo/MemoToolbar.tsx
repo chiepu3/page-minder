@@ -5,7 +5,7 @@
 import { Memo } from '@/types';
 import { PASTEL_COLORS, COLOR_PALETTE } from '@/lib/constants';
 import { useState } from 'react';
-import { IconPin, IconEdit, IconCopy, IconPalette, IconDelete, IconWarning } from '@/components/icons';
+import { IconPin, IconPinOff, IconEdit, IconCopy, IconPalette, IconDelete, IconWarning } from '@/components/icons';
 
 interface MemoToolbarProps {
   memo: Memo;
@@ -62,8 +62,8 @@ export function MemoToolbar({
       {/* 左側アイコン */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
         <ToolbarButton
-          icon={<IconPin size={16} />}
-          title={isPinned ? 'ピン解除' : 'ピン止め'}
+          icon={isPinned ? <IconPinOff size={16} /> : <IconPin size={16} />}
+          title={isPinned ? 'ピン解除（スクロール追従にする）' : 'ピン止め（ページ内固定にする）'}
           onClick={onTogglePin}
           active={isPinned}
         />

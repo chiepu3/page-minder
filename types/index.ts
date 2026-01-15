@@ -205,7 +205,8 @@ export type MessageAction =
     | 'ELEMENT_PICKED'
     | 'CREATE_MEMO'
     | 'GET_MEMOS_FOR_URL'
-    | 'SCROLL_TO_MEMO';
+    | 'SCROLL_TO_MEMO'
+    | 'MOVE_MEMO_TO_VISIBLE';
 
 /**
  * メッセージ構造

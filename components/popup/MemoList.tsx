@@ -9,12 +9,13 @@ import { IconInbox } from '@/components/icons';
 interface MemoListProps {
     memos: Memo[];
     onJump: (memoId: string) => void;
+    onRecall: (memoId: string) => void;
 }
 
 /**
  * メモ一覧表示コンポーネント
  */
-export function MemoList({ memos, onJump }: MemoListProps) {
+export function MemoList({ memos, onJump, onRecall }: MemoListProps) {
     if (memos.length === 0) {
         return (
             <div className="memo-list-empty">
@@ -35,6 +36,7 @@ export function MemoList({ memos, onJump }: MemoListProps) {
                         key={memo.id}
                         memo={memo}
                         onJump={onJump}
+                        onRecall={onRecall}
                     />
                 ))}
             </div>

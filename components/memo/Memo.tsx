@@ -40,14 +40,40 @@ export function Memo({ memo, onUpdate, onDelete }: MemoProps) {
     pinned: false,
   };
 
+  // ドラッグ判定用のref（クリック/ドラッグ判別）
+  const dragStartPosRef = useRef({ x: 0, y: 0 });
+  const hasDraggedRef = useRef(false);
+
   // ドラッグ機能
-  const { position: dragPosition, handleMouseDown: handleDragStart } = useDraggable({
+  const { position: dragPosition, handleMouseDown: originalHandleDragStart, isDragging } = useDraggable({
     initialPosition: { x: position.x, y: position.y },
     onPositionChange: (newPos) => {
       updatePosition({ x: newPos.x, y: newPos.y });
     },
     disabled: isEditing,
   });
+
+  // カスタムドラッグ開始ハンドラ（開始位置を記録）
+  const handleDragStart = (e: React.MouseEvent) => {
+    dragStartPosRef.current = { x: e.clientX, y: e.clientY };
+    hasDraggedRef.current = false;
+    originalHandleDragStart(e);
+  };
+
+  // ドラッグ距離を追跡（5px以上動いたらドラッグとみなす）
+  useEffect(() => {
+    if (isDragging) {
+      const checkDragDistance = (e: MouseEvent) => {
+        const dx = Math.abs(e.clientX - dragStartPosRef.current.x);
+        const dy = Math.abs(e.clientY - dragStartPosRef.current.y);
+        if (dx > 5 || dy > 5) {
+          hasDraggedRef.current = true;
+        }
+      };
+      document.addEventListener('mousemove', checkDragDistance);
+      return () => document.removeEventListener('mousemove', checkDragDistance);
+    }
+  }, [isDragging]);
 
   // リサイズ機能
   const { size, handleMouseDown: handleResizeStart } = useResizable({
@@ -74,14 +100,42 @@ export function Memo({ memo, onUpdate, onDelete }: MemoProps) {
     [memo, position, currentPatternId, onUpdate]
   );
 
-  // 最小化トグル
+  // 最小化トグル（ドラッグ後はスキップ）
   const toggleMinimize = () => {
+    // 実際にドラッグした場合は展開しない
+    if (hasDraggedRef.current) {
+      return;
+    }
     onUpdate({ ...memo, minimized: !memo.minimized });
   };
 
-  // ピン止めトグル
+  // ピン止めトグル（座標変換が必要）
   const togglePin = () => {
-    updatePosition({ pinned: !position.pinned });
+    const currentIsFixed = !position.pinned; // pinned=true means absolute
+    const newIsPinned = !position.pinned;
+    
+    let newX = dragPosition.x;
+    let newY = dragPosition.y;
+    
+    if (newIsPinned) {
+      // fixed → absolute: スクロール位置を加算
+      newX += window.scrollX;
+      newY += window.scrollY;
+    } else {
+      // absolute → fixed: スクロール位置を減算
+      newX -= window.scrollX;
+      newY -= window.scrollY;
+    }
+    
+    // 画面外に行かないよう制限
+    newX = Math.max(0, newX);
+    newY = Math.max(0, newY);
+    
+    updatePosition({ 
+      pinned: newIsPinned,
+      x: newX,
+      y: newY,
+    });
   };
 
   // 編集完了
