@@ -120,6 +120,7 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
  * グローバル設定
  */
 export interface GlobalSettings {
+    theme: 'light' | 'dark' | 'system';  // デフォルト: 'dark'
     defaultFontSize: number;             // デフォルト: 14
     defaultBackgroundColor: string;      // デフォルト: '#FFFFA5'
     defaultTextColor: string;            // デフォルト: '#333333'

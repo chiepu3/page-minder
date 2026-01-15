@@ -3,24 +3,36 @@
 // =============================================================================
 
 import { useEffect, useState, useCallback } from 'react';
-import type { Memo } from '@/types';
+import type { Memo, GlobalSettings } from '@/types';
 import { storage } from '@/lib/storage';
 import { matchAnyUrlPattern } from '@/lib/url-matcher';
 import { MemoList, AddMemoButton } from '@/components/popup';
 import { DEFAULT_SETTINGS, DEFAULT_MEMO_SIZE } from '@/lib/constants';
-import { IconStickyNote, IconSettings } from '@/components/icons';
+import { IconStickyNote, IconSettings, IconDarkMode, IconLightMode } from '@/components/icons';
 import './style.css';
 
 function App() {
+    const [settings, setSettings] = useState(DEFAULT_SETTINGS);
     const [memos, setMemos] = useState<Memo[]>([]);
     const [currentUrl, setCurrentUrl] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // 現在のタブURLとメモを取得
+    // 設定とデータをロード
     useEffect(() => {
         const loadData = async () => {
             try {
+                // 設定をロード
+                const globalSettings = await storage.getSettings();
+                setSettings(globalSettings);
+
+                // テーマ適用
+                if (globalSettings.theme === 'light') {
+                    document.body.classList.add('light-theme');
+                } else {
+                    document.body.classList.remove('light-theme');
+                }
+
                 // 現在のタブURLを取得
                 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
                 const url = tab?.url || '';
@@ -43,6 +55,32 @@ function App() {
         loadData();
     }, []);
 
+    // テーマ切り替え
+    const handleToggleTheme = useCallback(async () => {
+        const newTheme: 'light' | 'dark' = settings.theme === 'light' ? 'dark' : 'light';
+        const newSettings: GlobalSettings = { ...settings, theme: newTheme };
+        
+        await storage.saveSettings(newSettings);
+        setSettings(newSettings);
+
+        if (newTheme === 'light') {
+            document.body.classList.add('light-theme');
+        } else {
+            document.body.classList.remove('light-theme');
+        }
+
+        // 全タブのContent Scriptに通知
+        const tabs = await chrome.tabs.query({});
+        tabs.forEach(tab => {
+            if (tab.id) {
+                chrome.tabs.sendMessage(tab.id, {
+                    action: 'SAVE_SETTINGS',
+                    payload: newSettings
+                }).catch(() => {});
+            }
+        });
+    }, [settings]);
+
     // 新規メモ作成
     const handleAddMemo = useCallback(async () => {
         if (!currentUrl) {
@@ -51,7 +89,6 @@ function App() {
         }
 
         try {
-            const settings = await storage.getSettings();
             const patternId = crypto.randomUUID();
             
             const newMemo: Memo = {
@@ -83,7 +120,7 @@ function App() {
             await storage.saveMemo(newMemo);
             setMemos(prev => [...prev, newMemo]);
 
-            // Content Scriptにメモ追加を通知（失敗しても問題なし）
+            // Content Scriptにメモ追加を通知
             try {
                 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
                 if (tab?.id) {
@@ -93,14 +130,13 @@ function App() {
                     });
                 }
             } catch {
-                // Content Scriptが応答しない場合は無視（ページリロードで表示される）
                 console.log('Content Script not responding, memo will appear on page reload');
             }
         } catch (err) {
             setError('メモの作成に失敗しました');
             console.error('Failed to create memo:', err);
         }
-    }, [currentUrl]);
+    }, [currentUrl, settings]);
 
     // メモへジャンプ
     const handleJump = useCallback(async (memoId: string) => {
@@ -112,7 +148,6 @@ function App() {
                     payload: { memoId },
                 });
             }
-            // ポップアップを閉じる
             window.close();
         } catch (err) {
             console.error('Failed to scroll to memo:', err);
@@ -129,14 +164,12 @@ function App() {
                     payload: { memoId },
                 });
             }
-            // ポップアップを閉じる
             window.close();
         } catch (err) {
             console.error('Failed to recall memo:', err);
         }
     }, []);
 
-    // 全体設定ページを開く
     const handleOpenSettings = useCallback(() => {
         chrome.runtime.openOptionsPage();
     }, []);
@@ -161,6 +194,11 @@ function App() {
             </main>
 
             <footer className="popup-footer">
+                <button className="popup-footer-button" onClick={handleToggleTheme} title="テーマ切り替え">
+                    {settings.theme === 'light' ? <IconDarkMode size={18} /> : <IconLightMode size={18} />}
+                    テーマ
+                </button>
+                <div style={{ flex: 1 }} />
                 <button className="popup-footer-button" onClick={handleOpenSettings}>
                     <IconSettings size={18} color="currentColor" />
                     全体設定

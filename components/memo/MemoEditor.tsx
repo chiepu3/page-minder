@@ -3,9 +3,12 @@
 // =============================================================================
 
 import { useState, useRef, useEffect } from 'react';
+import { GlobalSettings } from '@/types';
+import { THEMES } from '@/lib/constants';
 
 interface MemoEditorProps {
   content: string;
+  settings: GlobalSettings;
   onSave: (content: string) => void;
   onCancel: () => void;
 }
@@ -13,14 +16,16 @@ interface MemoEditorProps {
 /**
  * メモ編集コンポーネント
  */
-export function MemoEditor({ content, onSave, onCancel }: MemoEditorProps) {
+export function MemoEditor({ content, settings, onSave, onCancel }: MemoEditorProps) {
   const [value, setValue] = useState(content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // テーマ取得
+  const theme = THEMES[settings.theme === 'system' ? 'dark' : settings.theme];
 
   // 初期フォーカス
   useEffect(() => {
     textareaRef.current?.focus();
-    // カーソルを末尾に
     textareaRef.current?.setSelectionRange(value.length, value.length);
   }, []);
 
@@ -46,11 +51,12 @@ export function MemoEditor({ content, onSave, onCancel }: MemoEditorProps) {
           flex: 1,
           width: '100%',
           padding: '8px',
-          border: '1px solid rgba(0,0,0,0.2)',
+          border: `1px solid ${theme.border}`,
           borderRadius: '6px',
           resize: 'none',
           outline: 'none',
-          backgroundColor: 'rgba(255,255,255,0.9)',
+          backgroundColor: settings.theme === 'light' ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.1)',
+          color: 'inherit',
           fontFamily: 'inherit',
           fontSize: 'inherit',
           lineHeight: 1.5,
@@ -61,33 +67,36 @@ export function MemoEditor({ content, onSave, onCancel }: MemoEditorProps) {
         <button
           style={{
             padding: '6px 12px',
-            fontSize: '12px',
+            fontSize: '11px',
+            fontWeight: 600,
             borderRadius: '6px',
-            border: '1px solid rgba(0,0,0,0.2)',
-            backgroundColor: '#fff',
+            border: `1px solid ${theme.border}`,
+            backgroundColor: 'transparent',
+            color: 'inherit',
             cursor: 'pointer',
             transition: 'background 0.15s ease',
           }}
           onClick={onCancel}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f0f0f0')}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fff')}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.05)')}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
         >
           キャンセル
         </button>
         <button
           style={{
             padding: '6px 12px',
-            fontSize: '12px',
+            fontSize: '11px',
+            fontWeight: 600,
             borderRadius: '6px',
             border: 'none',
-            backgroundColor: '#7c3aed',
-            color: '#fff',
+            backgroundColor: theme.accent,
+            color: settings.theme === 'dark' ? '#1a1a2e' : '#fff',
             cursor: 'pointer',
-            transition: 'background 0.15s ease',
+            transition: 'opacity 0.15s ease',
           }}
           onClick={() => onSave(value)}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#6d28d9')}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#7c3aed')}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
         >
           保存 (Ctrl+Enter)
         </button>

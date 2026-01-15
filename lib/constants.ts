@@ -35,6 +35,7 @@ export const COLOR_PALETTE = Object.values(PASTEL_COLORS);
  * デフォルトのグローバル設定
  */
 export const DEFAULT_SETTINGS: GlobalSettings = {
+    theme: 'dark',
     defaultFontSize: 14,
     defaultBackgroundColor: PASTEL_COLORS.yellow,
     defaultTextColor: '#333333',
@@ -42,6 +43,34 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
     logLevel: 'info',
     enableHistory: false,
 };
+
+/**
+ * テーマごとのカラー定義
+ */
+export const THEMES = {
+    dark: {
+        bg: '#2d2a3e',
+        surface: '#3d3a52',
+        border: '#4d4a62',
+        text: '#f0f0f0',
+        textSecondary: '#a8a6b8',
+        accent: '#b39ddb',
+        accentHover: '#d1c4e9',
+        success: '#a5d6a7',
+        danger: '#ef9a9a',
+    },
+    light: {
+        bg: '#ffffff',
+        surface: '#f8fafc',
+        border: '#e2e8f0',
+        text: '#1e293b',
+        textSecondary: '#64748b',
+        accent: '#7c3aed',
+        accentHover: '#6d28d9',
+        success: '#10b981',
+        danger: '#ef4444',
+    }
+} as const;
 
 // -----------------------------------------------------------------------------
 // Memo Defaults

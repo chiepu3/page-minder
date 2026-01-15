@@ -142,3 +142,28 @@ export function IconNote({ size = 24, color = 'currentColor', style }: IconProps
     </svg>
   );
 }
+/** フォントサイズアイコン (format_size) */
+export function IconFormatSize({ size = 24, color = 'currentColor', style }: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox={VIEWBOX} fill={color} style={style}>
+      <path d="M560-160v-520H360v-120h520v120H680v520H560Zm-360 0v-320H80v-120h360v120H320v320H200Z"/>
+    </svg>
+  );
+}
+/** ダークモードアイコン (dark_mode) */
+export function IconDarkMode({ size = 24, color = 'currentColor', style }: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox={VIEWBOX} fill={color} style={style}>
+      <path d="M480-120q-150 0-255-105T120-480q0-150 105-255t255-105q14 0 27.5 1t26.5 3q-41 29-65 74.5T440-480q0 65 24 110.5t65 74.5q-13 2-26.5 3t-27.5 1Zm0-80q56 0 105.5-24t80.5-65q-71-11-123.5-61t-52.5-130q0-80 52.5-130T666-771q-31-10-63-14.5t-63-4.5q-117 0-198.5 81.5T260-510q0 117 81.5 198.5T540-230Z"/>
+    </svg>
+  );
+}
+
+/** ライトモードアイコン (light_mode) */
+export function IconLightMode({ size = 24, color = 'currentColor', style }: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox={VIEWBOX} fill={color} style={style}>
+      <path d="M480-360q50 0 85-35t35-85q0-50-35-85t-85-35q-50 0-85 35t-35 85q0 50 35 85t85 35Zm0 80q-83 0-141.5-58.5T280-480q0-83 58.5-141.5T480-680q83 0 141.5 58.5T680-480q0 83-58.5 141.5T480-280ZM200-440H40v-80h160v80Zm720 0H760v-80h160v80ZM440-760v-160h80v160h-80Zm0 720v-160h80v160h-80ZM256-650l-101-101 57-57 101 101-57 57Zm548 548-101-101 57-57 101 101-57 57ZM155-256l101-101 57 57-101 101-57-57Zm548-548 101-101 57 57-101 101-57-57Z"/>
+    </svg>
+  );
+}

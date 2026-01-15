@@ -4,6 +4,10 @@
 
 :root {
     --popup-width: 340px;
+    --popup-radius: 10px;
+    --popup-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+
+    /* Dark Theme (Default) */
     --popup-bg: #2d2a3e;
     --popup-surface: #3d3a52;
     --popup-border: #4d4a62;
@@ -12,8 +16,20 @@
     --popup-accent: #b39ddb;
     --popup-accent-hover: #d1c4e9;
     --popup-success: #a5d6a7;
-    --popup-radius: 10px;
-    --popup-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    --popup-danger: #ef9a9a;
+}
+
+body.light-theme {
+    /* Light Theme Overlay */
+    --popup-bg: #ffffff;
+    --popup-surface: #f8fafc;
+    --popup-border: #e2e8f0;
+    --popup-text: #1e293b;
+    --popup-text-secondary: #64748b;
+    --popup-accent: #7c3aed;
+    --popup-accent-hover: #6d28d9;
+    --popup-success: #10b981;
+    --popup-danger: #ef4444;
 }
 
 * {

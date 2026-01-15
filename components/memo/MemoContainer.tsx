@@ -9,17 +9,30 @@ import { storage } from '@/lib/storage';
 import { matchAnyUrlPattern } from '@/lib/url-matcher';
 import { logger } from '@/lib/logger';
 
+import { DEFAULT_SETTINGS } from '@/lib/constants';
+
 /**
  * メモコンテナ - 現在のURLにマッチするメモを表示
  */
 export function MemoContainer() {
   const [memos, setMemos] = useState<MemoType[]>([]);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
 
   // 初回ロード
   useEffect(() => {
     loadMemos();
+    loadSettings();
   }, []);
+
+  const loadSettings = async () => {
+    try {
+      const globalSettings = await storage.getSettings();
+      setSettings(globalSettings);
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+    }
+  };
 
   // メッセージリスナー（Popupからの通知を受信）
   useEffect(() => {
@@ -32,23 +45,19 @@ export function MemoContainer() {
 
       if (message.action === 'CREATE_MEMO') {
         const newMemo = message.payload as MemoType;
-        // 現在のURLにマッチするか確認
         if (matchAnyUrlPattern(window.location.href, newMemo.urlPatterns)) {
           setMemos((prev) => [...prev, newMemo]);
-          logger.info('Memo added via message', { memoId: newMemo.id });
         }
         sendResponse({ success: true });
       }
 
       if (message.action === 'SCROLL_TO_MEMO') {
         const { memoId } = message.payload as { memoId: string };
-        // メモを探してその位置までスクロール
         const targetMemo = memos.find(m => m.id === memoId);
         if (targetMemo) {
           const patternId = targetMemo.urlPatterns[0]?.id ?? 'default';
           const pos = targetMemo.positions[patternId];
           if (pos) {
-            // pinnedならそのまま、fixedならスクロール位置を考慮
             const scrollX = pos.pinned ? pos.x - window.innerWidth / 2 : 0;
             const scrollY = pos.pinned ? pos.y - window.innerHeight / 2 : 0;
             window.scrollTo({
@@ -56,13 +65,11 @@ export function MemoContainer() {
               top: Math.max(0, scrollY),
               behavior: 'smooth'
             });
-            logger.info('Scrolled to memo', { memoId, x: pos.x, y: pos.y });
           }
         }
         sendResponse({ success: true });
       }
 
-      // メモを左上に移動（呼び出し）
       if (message.action === 'MOVE_MEMO_TO_VISIBLE') {
         const { memoId } = message.payload as { memoId: string };
         const targetMemo = memos.find(m => m.id === memoId);
@@ -74,38 +81,39 @@ export function MemoContainer() {
               ...targetMemo.positions[patternId],
               x: 50,
               y: 50,
-              pinned: false, // fixedにして画面左上に表示
+              pinned: false,
             },
           };
           const updatedMemo = { ...targetMemo, positions: newPositions, minimized: false };
           storage.saveMemo(updatedMemo);
           setMemos((prev) => prev.map((m) => (m.id === memoId ? updatedMemo : m)));
-          logger.info('Memo moved to visible', { memoId });
         }
         sendResponse({ success: true });
       }
 
-      return true; // 非同期レスポンスを示す
+      // 設定更新通知（テーマ切り替えなど）
+      if (message.action === 'SAVE_SETTINGS') {
+        setSettings(message.payload as any);
+        sendResponse({ success: true });
+      }
+
+      return true;
     };
 
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => {
       chrome.runtime.onMessage.removeListener(handleMessage);
     };
-  }, [memos]); // memosを依存配列に追加
+  }, [memos]);
 
   const loadMemos = async () => {
     try {
       const allMemos = await storage.getMemos();
       const currentUrl = window.location.href;
-      
-      // 現在のURLにマッチするメモをフィルタリング
       const matchingMemos = allMemos.filter((memo) =>
         matchAnyUrlPattern(currentUrl, memo.urlPatterns)
       );
-      
       setMemos(matchingMemos);
-      logger.debug('Memos loaded', { count: matchingMemos.length, url: currentUrl });
     } catch (error) {
       logger.error('Failed to load memos', { error: String(error) });
     } finally {
@@ -135,6 +143,7 @@ export function MemoContainer() {
         <Memo
           key={memo.id}
           memo={memo}
+          settings={settings}
           onUpdate={handleMemoUpdate}
           onDelete={handleMemoDelete}
         />
