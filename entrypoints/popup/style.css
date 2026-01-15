@@ -333,3 +333,43 @@ body.light-theme .add-memo-button {
 .popup-main::-webkit-scrollbar-thumb:hover {
     background: var(--popup-text-secondary);
 }
+
+/* Drag Handle */
+.memo-list-item-drag-handle {
+    cursor: grab;
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    margin-left: -4px;
+}
+
+.memo-list-item-drag-handle:hover {
+    opacity: 1;
+}
+
+.memo-list-item-drag-handle:active {
+    cursor: grabbing;
+}
+
+/* Drag state */
+.memo-list-item[draggable="true"] {
+    cursor: default;
+}
+
+.memo-list-item.dragging {
+    opacity: 0.5;
+}
+
+/* Delete button danger state */
+.memo-list-item-button-danger {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #ef4444 !important;
+    font-weight: 600;
+}
+
+.memo-list-item-button-danger:hover {
+    background: rgba(239, 68, 68, 0.25) !important;
+}

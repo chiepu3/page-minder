@@ -7,6 +7,7 @@ import { Memo as MemoType, MemoPosition, GlobalSettings } from '@/types';
 import { MemoToolbar } from './MemoToolbar';
 import { MemoEditor } from './MemoEditor';
 import { SettingsModal } from './SettingsModal';
+import { ConfirmDialog } from './ConfirmDialog';
 import { useDraggable } from '@/hooks/useDraggable';
 import { useResizable } from '@/hooks/useResizable';
 import { IconStickyNote, IconMinimize } from '@/components/icons';
@@ -32,6 +33,7 @@ interface MemoProps {
 export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // テーマ取得
@@ -276,7 +278,7 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
           isPinned={position.pinned}
           onEdit={() => setIsEditing(true)}
           onTogglePin={togglePin}
-          onDelete={() => onDelete(memo.id)}
+          onDelete={() => setIsDeleteDialogOpen(true)}
           onColorChange={(color) => onUpdate({ ...memo, backgroundColor: color })}
           onFontSizeChange={(size) => onUpdate({ ...memo, fontSize: size })}
           onOpenSettings={() => setIsSettingsOpen(true)}
@@ -304,6 +306,23 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
           settings={settings}
           onUpdate={onUpdate}
           onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
+
+      {/* 削除確認ダイアログ */}
+      {isDeleteDialogOpen && (
+        <ConfirmDialog
+          settings={settings}
+          title="メモを削除"
+          message="このメモを削除してもよろしいですか？この操作は取り消せません。"
+          confirmText="削除"
+          cancelText="キャンセル"
+          onConfirm={() => {
+            onDelete(memo.id);
+            setIsDeleteDialogOpen(false);
+          }}
+          onCancel={() => setIsDeleteDialogOpen(false)}
+          isDanger={true}
         />
       )}
     </>

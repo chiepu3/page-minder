@@ -91,6 +91,13 @@ export function MemoContainer() {
         sendResponse({ success: true });
       }
 
+      // ポップアップからの削除通知
+      if (message.action === 'DELETE_MEMO') {
+        const { memoId } = message.payload as { memoId: string };
+        setMemos((prev) => prev.filter((m) => m.id !== memoId));
+        sendResponse({ success: true });
+      }
+
       // 設定更新通知（テーマ切り替えなど）
       if (message.action === 'SAVE_SETTINGS') {
         setSettings(message.payload as any);

@@ -7,7 +7,7 @@ export default defineConfig({
     name: 'PageMinder',
     description: '業務メモを画面上に表示する拡張機能',
     version: '0.1.0',
-    permissions: ['storage', 'activeTab', 'scripting'],
+    permissions: ['storage', 'activeTab', 'scripting', 'contextMenus'],
     optional_permissions: ['history', 'webNavigation'],
     host_permissions: ['<all_urls>'],
   },

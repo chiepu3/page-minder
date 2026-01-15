@@ -174,6 +174,50 @@ function App() {
         chrome.runtime.openOptionsPage();
     }, []);
 
+    // メモ削除
+    const handleDelete = useCallback(async (memoId: string) => {
+        try {
+            await storage.deleteMemo(memoId);
+            setMemos(prev => prev.filter(m => m.id !== memoId));
+
+            // Content Scriptに削除を通知
+            try {
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (tab?.id) {
+                    await chrome.tabs.sendMessage(tab.id, {
+                        action: 'DELETE_MEMO',
+                        payload: { memoId },
+                    });
+                }
+            } catch {
+                console.log('Content Script not responding');
+            }
+        } catch (err) {
+            setError('メモの削除に失敗しました');
+            console.error('Failed to delete memo:', err);
+        }
+    }, []);
+
+    // メモの並び替え
+    const handleReorder = useCallback(async (reorderedMemos: Memo[]) => {
+        setMemos(reorderedMemos);
+
+        // ストレージのメモ順序を更新
+        try {
+            const allMemos = await storage.getMemos();
+            const reorderedIds = reorderedMemos.map(m => m.id);
+            const otherMemos = allMemos.filter(m => !reorderedIds.includes(m.id));
+            
+            // 並び替えられたメモを先頭に、その後にその他のメモを配置
+            const newAllMemos = [...reorderedMemos, ...otherMemos];
+            
+            // ストレージを更新（全メモを上書き）
+            await chrome.storage.local.set({ memos: newAllMemos });
+        } catch (err) {
+            console.error('Failed to save memo order:', err);
+        }
+    }, []);
+
     return (
         <div className="popup-container">
             <header className="popup-header">
@@ -189,7 +233,13 @@ function App() {
                 ) : error ? (
                     <div className="popup-error">{error}</div>
                 ) : (
-                    <MemoList memos={memos} onJump={handleJump} onRecall={handleRecall} />
+                    <MemoList
+                        memos={memos}
+                        onJump={handleJump}
+                        onRecall={handleRecall}
+                        onDelete={handleDelete}
+                        onReorder={handleReorder}
+                    />
                 )}
             </main>
 
