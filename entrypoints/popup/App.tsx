@@ -177,7 +177,7 @@ function App() {
     return (
         <div className="popup-container">
             <header className="popup-header">
-                <IconStickyNote size={24} color="var(--popup-accent)" />
+                <IconStickyNote size={24} color="var(--popup-header-icon)" />
                 <h1 className="popup-title">PageMinder</h1>
             </header>
 
