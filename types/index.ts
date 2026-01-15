@@ -202,7 +202,10 @@ export type MessageAction =
     | 'SAVE_SETTINGS'
     | 'GET_CURRENT_URL'
     | 'START_ELEMENT_PICKER'
-    | 'ELEMENT_PICKED';
+    | 'ELEMENT_PICKED'
+    | 'CREATE_MEMO'
+    | 'GET_MEMOS_FOR_URL'
+    | 'SCROLL_TO_MEMO';
 
 /**
  * メッセージ構造

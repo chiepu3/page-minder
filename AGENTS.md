@@ -28,22 +28,25 @@
 | ファイル | 内容 |
 |----------|------|
 | `entrypoints/content.tsx` | Shadow DOMセットアップ |
-| `components/memo/MemoContainer.tsx` | URLマッチングでメモ表示 |
+| `components/memo/MemoContainer.tsx` | URLマッチングでメモ表示、メッセージ受信 |
 | `components/memo/Memo.tsx` | ドラッグ、リサイズ、最小化 |
-| `components/memo/MemoToolbar.tsx` | ピン止め、カラー、削除 |
+| `components/memo/MemoToolbar.tsx` | ピン止め、カラー、削除（SVGアイコン） |
 | `components/memo/MemoEditor.tsx` | テキスト編集 |
 | `hooks/useDraggable.ts` | ドラッグフック |
 | `hooks/useResizable.ts` | リサイズフック |
 
+### Phase 3: Popup UI ✅
+| ファイル | 内容 |
+|----------|------|
+| `entrypoints/popup/App.tsx` | ポップアップメイン |
+| `components/popup/MemoList.tsx` | メモ一覧表示 |
+| `components/popup/MemoListItem.tsx` | 個別メモカード |
+| `components/popup/AddMemoButton.tsx` | 新規メモ作成ボタン |
+| `components/icons/index.tsx` | SVGアイコンコンポーネント（Material Symbols） |
+
 ---
 
 ## 未完了（次の作業）
-
-### Phase 3: Popup UI
-- [ ] 現在ページのメモ一覧
-- [ ] 新規メモ作成ボタン
-- [ ] ジャンプボタン
-- [ ] 「全体設定」リンク
 
 ### Phase 4: 機能拡張
 - [ ] 要素ピッカー統合（`@botanicastudios/element-selector`）
@@ -66,6 +69,7 @@
 | `.agent/rules/coding.md` | コーディングルール |
 | `.agent/rules/testing.md` | テストルール |
 | `.agent/rules/commit.md` | コミットルール |
+| `.agent/rules/design.md` | デザインルール（パステルカラー、アイコン） |
 | `.agent/workflows/feature.md` | TDD実装ワークフロー |
 
 ---
@@ -98,14 +102,14 @@ git push origin v0.1.0
 2. **Tailwind v4**: `@tailwindcss/postcss` を使用（v3とは設定が異なる）
 3. **Shadow DOM**: CSS隔離のためShadow DOMを使用
 4. **フォント単位**: Content Scriptでは`rem`より`px`推奨（ホストページの影響回避）
+5. **アイコン**: Shadow DOM内はSVG、Popup/OptionsはCDN使用可
 
 ---
 
 ## 現在の状態
 
-- ビルド成功: 438KB
+- ビルド成功
 - テスト: 56件パス
-- GitHub: 最新コードがプッシュ済み
-- **UI確認**: まだ未実施（SSH環境のため）
+- **Phase 3完了**: Popup UIでメモ作成・一覧表示可能
 
-次にやるべき: **Phase 3 Popup** を実装してメモ作成できるようにする
+次にやるべき: **Phase 4 機能拡張** または **Phase 5 Options Page**

@@ -38,8 +38,9 @@ export function useDraggable({
         (e: React.MouseEvent) => {
             if (disabled) return;
 
-            // 他の要素（ボタンなど）からのイベントは無視
-            if (e.target !== e.currentTarget) return;
+            // ボタンやインタラクティブな要素からのイベントは無視
+            const target = e.target as HTMLElement;
+            if (target.tagName === 'BUTTON' || target.closest('button')) return;
 
             e.preventDefault();
             setIsDragging(true);

@@ -8,6 +8,7 @@ import { MemoToolbar } from './MemoToolbar';
 import { MemoEditor } from './MemoEditor';
 import { useDraggable } from '@/hooks/useDraggable';
 import { useResizable } from '@/hooks/useResizable';
+import { IconStickyNote, IconMinimize } from '@/components/icons';
 import {
   DEFAULT_MEMO_SIZE,
   MINIMIZED_SIZE,
@@ -94,25 +95,40 @@ export function Memo({ memo, onUpdate, onDelete }: MemoProps) {
   const textColor = memo.textColor ?? '#333333';
   const fontSize = memo.fontSize ?? 14;
 
+  // 共通スタイル
+  const baseStyle = {
+    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  };
+
   // 最小化時の表示
   if (memo.minimized) {
     return (
       <div
         ref={containerRef}
-        className="fixed cursor-pointer rounded-lg shadow-lg flex items-center justify-center text-xl hover:scale-110 transition-transform"
         style={{
-          left: dragPosition.x,
-          top: dragPosition.y,
-          width: MINIMIZED_SIZE.width,
-          height: MINIMIZED_SIZE.height,
+          ...baseStyle,
+          position: 'fixed',
+          left: `${dragPosition.x}px`,
+          top: `${dragPosition.y}px`,
+          width: `${MINIMIZED_SIZE.width}px`,
+          height: `${MINIMIZED_SIZE.height}px`,
           backgroundColor,
           zIndex: 999999,
+          cursor: 'pointer',
+          borderRadius: '8px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'transform 0.15s ease',
         }}
         onClick={toggleMinimize}
         onMouseDown={handleDragStart}
         title={memo.title ?? 'メモ'}
+        onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
+        onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
       >
-        📝
+        <IconStickyNote size={18} color={textColor} />
       </div>
     );
   }
@@ -120,38 +136,64 @@ export function Memo({ memo, onUpdate, onDelete }: MemoProps) {
   return (
     <div
       ref={containerRef}
-      className="fixed rounded-lg shadow-xl overflow-hidden flex flex-col"
       style={{
-        left: dragPosition.x,
-        top: dragPosition.y,
-        width: size.width,
-        height: size.height,
+        ...baseStyle,
+        position: position.pinned ? 'absolute' : 'fixed',
+        left: `${dragPosition.x}px`,
+        top: `${dragPosition.y}px`,
+        width: `${size.width}px`,
+        height: `${size.height}px`,
         backgroundColor,
         color: textColor,
         fontSize: `${fontSize}px`,
         zIndex: 999999,
-        position: position.pinned ? 'absolute' : 'fixed',
+        borderRadius: '10px',
+        boxShadow: '0 6px 24px rgba(0, 0, 0, 0.18)',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
       {/* ドラッグハンドル（タイトルバー） */}
       <div
-        className="flex items-center justify-between px-3 py-2 cursor-move select-none"
-        style={{ backgroundColor: 'rgba(0,0,0,0.1)' }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px 12px',
+          backgroundColor: 'rgba(0,0,0,0.08)',
+          cursor: 'move',
+          userSelect: 'none',
+        }}
         onMouseDown={handleDragStart}
       >
-        <span className="font-medium truncate">
+        <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
           {memo.title ?? 'メモ'}
         </span>
         <button
-          className="opacity-60 hover:opacity-100 transition-opacity"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            opacity: 0.6,
+            padding: '2px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
           onClick={toggleMinimize}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
         >
-          ➖
+          <IconMinimize size={18} color={textColor} />
         </button>
       </div>
 
       {/* コンテンツエリア */}
-      <div className="flex-1 overflow-y-auto p-3">
+      <div 
+        style={{ flex: 1, overflowY: 'auto', padding: '12px', cursor: 'move' }}
+        onMouseDown={!isEditing ? handleDragStart : undefined}
+      >
         {isEditing ? (
           <MemoEditor
             content={memo.content}
@@ -160,7 +202,11 @@ export function Memo({ memo, onUpdate, onDelete }: MemoProps) {
           />
         ) : (
           <div
-            className="whitespace-pre-wrap break-words"
+            style={{ 
+              whiteSpace: 'pre-wrap', 
+              wordBreak: 'break-word',
+              minHeight: '40px',
+            }}
             onDoubleClick={() => setIsEditing(true)}
           >
             {memo.content || 'ダブルクリックで編集'}
@@ -180,11 +226,16 @@ export function Memo({ memo, onUpdate, onDelete }: MemoProps) {
 
       {/* リサイズハンドル */}
       <div
-        className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize"
-        onMouseDown={handleResizeStart}
         style={{
-          background: 'linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.2) 50%)',
+          position: 'absolute',
+          bottom: 0,
+          right: 0,
+          width: '16px',
+          height: '16px',
+          cursor: 'se-resize',
+          background: 'linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.15) 50%)',
         }}
+        onMouseDown={handleResizeStart}
       />
     </div>
   );

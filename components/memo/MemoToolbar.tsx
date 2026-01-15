@@ -5,6 +5,7 @@
 import { Memo } from '@/types';
 import { PASTEL_COLORS, COLOR_PALETTE } from '@/lib/constants';
 import { useState } from 'react';
+import { IconPin, IconEdit, IconCopy, IconPalette, IconDelete, IconWarning } from '@/components/icons';
 
 interface MemoToolbarProps {
   memo: Memo;
@@ -43,31 +44,44 @@ export function MemoToolbar({
     try {
       await navigator.clipboard.writeText(memo.content);
     } catch {
-      // フォールバック
       console.error('Failed to copy to clipboard');
     }
   };
 
   return (
     <div
-      className="flex items-center justify-between px-2 py-1 border-t"
-      style={{ borderColor: 'rgba(0,0,0,0.1)', backgroundColor: 'rgba(0,0,0,0.05)' }}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '4px 8px',
+        borderTop: '1px solid rgba(0,0,0,0.1)',
+        backgroundColor: 'rgba(0,0,0,0.05)',
+      }}
     >
       {/* 左側アイコン */}
-      <div className="flex items-center gap-1">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
         <ToolbarButton
-          icon={isPinned ? '📍' : '📌'}
+          icon={<IconPin size={16} />}
           title={isPinned ? 'ピン解除' : 'ピン止め'}
           onClick={onTogglePin}
           active={isPinned}
         />
-        <ToolbarButton icon="✏️" title="編集" onClick={onEdit} />
-        <ToolbarButton icon="📋" title="コピー" onClick={handleCopy} />
+        <ToolbarButton 
+          icon={<IconEdit size={16} />} 
+          title="編集" 
+          onClick={onEdit} 
+        />
+        <ToolbarButton 
+          icon={<IconCopy size={16} />} 
+          title="コピー" 
+          onClick={handleCopy} 
+        />
         
         {/* カラーピッカー */}
-        <div className="relative">
+        <div style={{ position: 'relative' }}>
           <ToolbarButton
-            icon="🎨"
+            icon={<IconPalette size={16} />}
             title="背景色"
             onClick={() => setShowColorPicker(!showColorPicker)}
             active={showColorPicker}
@@ -80,16 +94,15 @@ export function MemoToolbar({
                 onColorChange(color);
                 setShowColorPicker(false);
               }}
-              onClose={() => setShowColorPicker(false)}
             />
           )}
         </div>
       </div>
 
       {/* 右側アイコン */}
-      <div className="flex items-center gap-1">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
         <ToolbarButton
-          icon={showDeleteConfirm ? '⚠️' : '🗑️'}
+          icon={showDeleteConfirm ? <IconWarning size={16} color="#d32f2f" /> : <IconDelete size={16} />}
           title={showDeleteConfirm ? '確認: 本当に削除？' : '削除'}
           onClick={handleDelete}
           danger={showDeleteConfirm}
@@ -104,7 +117,7 @@ export function MemoToolbar({
 // -----------------------------------------------------------------------------
 
 interface ToolbarButtonProps {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   onClick: () => void;
   active?: boolean;
@@ -112,18 +125,30 @@ interface ToolbarButtonProps {
 }
 
 function ToolbarButton({ icon, title, onClick, active, danger }: ToolbarButtonProps) {
+  const [isHovered, setIsHovered] = useState(false);
+
   return (
     <button
-      className={`
-        w-7 h-7 flex items-center justify-center rounded transition-all
-        hover:bg-black/10 active:scale-95
-        ${active ? 'bg-black/10' : ''}
-        ${danger ? 'animate-pulse' : ''}
-      `}
+      style={{
+        width: '28px',
+        height: '28px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '6px',
+        border: 'none',
+        background: active || isHovered ? 'rgba(0,0,0,0.1)' : 'transparent',
+        cursor: 'pointer',
+        transition: 'all 0.15s ease',
+        transform: isHovered ? 'scale(0.95)' : 'scale(1)',
+        color: danger ? '#d32f2f' : '#555',
+      }}
       title={title}
       onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <span className="text-base">{icon}</span>
+      {icon}
     </button>
   );
 }
@@ -132,25 +157,43 @@ interface ColorPickerProps {
   colors: readonly string[];
   currentColor: string;
   onSelect: (color: string) => void;
-  onClose: () => void;
 }
 
-function ColorPicker({ colors, currentColor, onSelect, onClose }: ColorPickerProps) {
+function ColorPicker({ colors, currentColor, onSelect }: ColorPickerProps) {
   return (
     <div
-      className="absolute bottom-full left-0 mb-1 p-2 bg-white rounded-lg shadow-xl border grid grid-cols-4 gap-1"
-      style={{ zIndex: 1000000 }}
+      style={{
+        position: 'absolute',
+        bottom: '100%',
+        left: '0',
+        marginBottom: '4px',
+        padding: '8px',
+        backgroundColor: '#fff',
+        borderRadius: '10px',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+        border: '1px solid rgba(0,0,0,0.1)',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '4px',
+        zIndex: 1000000,
+      }}
     >
       {colors.map((color) => (
         <button
           key={color}
-          className={`
-            w-6 h-6 rounded-full transition-transform hover:scale-110
-            ${color === currentColor ? 'ring-2 ring-blue-500 ring-offset-1' : ''}
-          `}
-          style={{ backgroundColor: color }}
+          style={{
+            width: '24px',
+            height: '24px',
+            borderRadius: '50%',
+            border: color === currentColor ? '2px solid #3b82f6' : '1px solid rgba(0,0,0,0.1)',
+            backgroundColor: color,
+            cursor: 'pointer',
+            transition: 'transform 0.1s ease',
+          }}
           onClick={() => onSelect(color)}
           title={color}
+          onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.15)')}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
         />
       ))}
     </div>
