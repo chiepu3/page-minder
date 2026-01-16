@@ -19,6 +19,7 @@
   "dependencies": {
     "@botanicastudios/element-selector": "^0.1.10",
     "@uiw/react-md-editor": "^3.0.0",
+    "marked": "^17.0.1",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "uuid": "^11.0.0"
