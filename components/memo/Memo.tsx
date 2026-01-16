@@ -3,6 +3,8 @@
 // =============================================================================
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import MDEditor from '@uiw/react-md-editor';
+import '@uiw/react-markdown-preview/markdown.css';
 import { Memo as MemoType, MemoPosition, GlobalSettings } from '@/types';
 import { MemoToolbar } from './MemoToolbar';
 import { MemoEditor } from './MemoEditor';
@@ -258,15 +260,27 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
             />
           ) : (
             <div
-              style={{ 
-                whiteSpace: 'pre-wrap', 
-                wordBreak: 'break-word',
+              style={{
                 minHeight: '40px',
                 fontSize: `${fontSize}px`,
               }}
               onDoubleClick={() => setIsEditing(true)}
+              data-color-mode={settings.theme === 'dark' ? 'dark' : 'light'}
             >
-              {memo.content || 'ダブルクリックで編集'}
+              {memo.content ? (
+                <MDEditor.Markdown
+                  source={memo.content}
+                  style={{
+                    fontSize: `${fontSize}px`,
+                    backgroundColor: 'transparent',
+                    color: memoTextColor,
+                  }}
+                />
+              ) : (
+                <div style={{ opacity: 0.5, fontStyle: 'italic' }}>
+                  ダブルクリックで編集
+                </div>
+              )}
             </div>
           )}
         </div>

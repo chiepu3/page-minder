@@ -41,9 +41,11 @@ Phase 1〜5 の全機能を実装完了。
 
 ## 未着手
 
-### Phase 6: Markdownエディタ
-- [ ] Markdownプレビュー
-- [ ] WYSIWYGエディタ
+### Phase 6: Markdownエディタ ✅
+- [x] Markdownプレビュー
+- [x] 編集/プレビュー切り替えボタン
+- [x] キーボードショートカット (Ctrl+B 太字など)
+- [x] @uiw/react-md-editor 統合
 
 ### Phase 6: 機能拡張
 - [ ] 要素ピッカー統合

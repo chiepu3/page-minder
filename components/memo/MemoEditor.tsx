@@ -2,7 +2,10 @@
 // PageMinder - Memo Editor Component
 // =============================================================================
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import MDEditor, { commands } from '@uiw/react-md-editor';
+import '@uiw/react-md-editor/markdown-editor.css';
+import '@uiw/react-markdown-preview/markdown.css';
 import { GlobalSettings } from '@/types';
 import { THEMES } from '@/lib/constants';
 
@@ -14,55 +17,113 @@ interface MemoEditorProps {
 }
 
 /**
- * メモ編集コンポーネント
+ * メモ編集コンポーネント（Markdownエディタ搭載）
  */
 export function MemoEditor({ content, settings, onSave, onCancel }: MemoEditorProps) {
   const [value, setValue] = useState(content);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [previewMode, setPreviewMode] = useState<'edit' | 'preview'>('edit');
 
   // テーマ取得
   const theme = THEMES[settings.theme === 'system' ? 'dark' : settings.theme];
+  const isDark = settings.theme === 'dark';
 
-  // 初期フォーカス
+  // グローバルキーボードショートカット
   useEffect(() => {
-    textareaRef.current?.focus();
-    textareaRef.current?.setSelectionRange(value.length, value.length);
-  }, []);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        onSave(value);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel();
+      }
+    };
 
-  // キーボードショートカット
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      onSave(value);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      onCancel();
-    }
-  };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [value, onSave, onCancel]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '8px' }}>
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={handleKeyDown}
+      {/* プレビューモード切り替えボタン */}
+      <div style={{ display: 'flex', gap: '4px', padding: '4px 0' }}>
+        <button
+          style={{
+            padding: '4px 12px',
+            fontSize: '11px',
+            fontWeight: 600,
+            borderRadius: '4px',
+            border: `1px solid ${theme.border}`,
+            backgroundColor: previewMode === 'edit' ? theme.accent : 'transparent',
+            color: previewMode === 'edit' ? (isDark ? '#1a1a2e' : '#fff') : 'inherit',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+          }}
+          onClick={() => setPreviewMode('edit')}
+        >
+          📝 編集
+        </button>
+        <button
+          style={{
+            padding: '4px 12px',
+            fontSize: '11px',
+            fontWeight: 600,
+            borderRadius: '4px',
+            border: `1px solid ${theme.border}`,
+            backgroundColor: previewMode === 'preview' ? theme.accent : 'transparent',
+            color: previewMode === 'preview' ? (isDark ? '#1a1a2e' : '#fff') : 'inherit',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+          }}
+          onClick={() => setPreviewMode('preview')}
+        >
+          👁️ プレビュー
+        </button>
+      </div>
+
+      {/* Markdownエディタ */}
+      <div
         style={{
           flex: 1,
-          width: '100%',
-          padding: '8px',
-          border: `1px solid ${theme.border}`,
+          overflow: 'auto',
           borderRadius: '6px',
-          resize: 'none',
-          outline: 'none',
-          backgroundColor: settings.theme === 'light' ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.1)',
-          color: 'inherit',
-          fontFamily: 'inherit',
-          fontSize: 'inherit',
-          lineHeight: 1.5,
+          border: `1px solid ${theme.border}`,
         }}
-        placeholder="メモを入力..."
-      />
+        data-color-mode={isDark ? 'dark' : 'light'}
+      >
+        <MDEditor
+          value={value}
+          onChange={(val) => setValue(val || '')}
+          preview={previewMode}
+          height="100%"
+          hideToolbar={false}
+          enableScroll={true}
+          visibleDragbar={false}
+          commands={[
+            commands.bold,
+            commands.italic,
+            commands.strikethrough,
+            commands.hr,
+            commands.divider,
+            commands.title,
+            commands.divider,
+            commands.link,
+            commands.quote,
+            commands.code,
+            commands.divider,
+            commands.unorderedListCommand,
+            commands.orderedListCommand,
+            commands.checkedListCommand,
+          ]}
+          extraCommands={[]}
+          style={{
+            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.95)',
+            fontSize: `${settings.defaultFontSize}px`,
+          }}
+        />
+      </div>
+
+      {/* 保存・キャンセルボタン */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
         <button
           style={{
@@ -90,7 +151,7 @@ export function MemoEditor({ content, settings, onSave, onCancel }: MemoEditorPr
             borderRadius: '6px',
             border: 'none',
             backgroundColor: theme.accent,
-            color: settings.theme === 'dark' ? '#1a1a2e' : '#fff',
+            color: isDark ? '#1a1a2e' : '#fff',
             cursor: 'pointer',
             transition: 'opacity 0.15s ease',
           }}
