@@ -8,7 +8,6 @@ import { useState } from 'react';
 import { 
   IconPin, 
   IconPinOff, 
-  IconEdit, 
   IconCopy, 
   IconPalette, 
   IconDelete, 
@@ -21,7 +20,6 @@ interface MemoToolbarProps {
   memo: Memo;
   settings: GlobalSettings;
   isPinned: boolean;
-  onEdit: () => void;
   onTogglePin: () => void;
   onDelete: () => void;
   onColorChange: (color: string) => void;
@@ -36,7 +34,6 @@ export function MemoToolbar({
   memo,
   settings,
   isPinned,
-  onEdit,
   onTogglePin,
   onDelete,
   onColorChange,
@@ -85,11 +82,6 @@ export function MemoToolbar({
           title={isPinned ? 'ピン解除' : 'ピン止め'}
           onClick={onTogglePin}
           active={isPinned}
-        />
-        <ToolbarButton 
-          icon={<IconEdit size={16} />} 
-          title="編集" 
-          onClick={onEdit} 
         />
         <ToolbarButton 
           icon={<IconCopy size={16} />} 

@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { marked } from 'marked';
 import { Memo as MemoType, MemoPosition, GlobalSettings } from '@/types';
 import { MemoToolbar } from './MemoToolbar';
 import { MemoEditor } from './MemoEditor';
@@ -145,6 +146,34 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
     setIsEditing(false);
   };
 
+  // 編集中に外側をクリックしたら保存して終了
+  const pendingContentRef = useRef(memo.content);
+  useEffect(() => {
+    if (!isEditing) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      // composedPath()を使ってShadow DOM内のイベントを正しく処理
+      const path = e.composedPath();
+      const isInsideMemo = path.some(el => el === containerRef.current);
+      
+      if (!isInsideMemo) {
+        // 外側クリック → 保存して終了
+        onUpdate({ ...memo, content: pendingContentRef.current });
+        setIsEditing(false);
+      }
+    };
+
+    // 少し遅延させて登録（ダブルクリックイベントと競合しないように）
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isEditing, memo, onUpdate]);
+
   // メモ自体の背景色/文字色（パステルカラーが基本）
   const memoBgColor = memo.backgroundColor ?? PASTEL_COLORS.yellow;
   const memoTextColor = memo.textColor ?? '#333333';
@@ -246,8 +275,9 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
 
         {/* コンテンツエリア */}
         <div 
-          style={{ flex: 1, overflowY: 'auto', padding: '12px', cursor: 'move' }}
+          style={{ flex: 1, overflowY: 'auto', padding: '12px', cursor: isEditing ? 'default' : 'move' }}
           onMouseDown={!isEditing ? handleDragStart : undefined}
+          onDoubleClick={!isEditing ? () => setIsEditing(true) : undefined}
         >
           {isEditing ? (
             <MemoEditor
@@ -255,34 +285,47 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
               settings={settings}
               onSave={handleSaveContent}
               onCancel={() => setIsEditing(false)}
+              onChange={(newContent) => { pendingContentRef.current = newContent; }}
             />
           ) : (
             <div
               style={{ 
-                whiteSpace: 'pre-wrap', 
-                wordBreak: 'break-word',
-                minHeight: '40px',
+                minHeight: '100%',
                 fontSize: `${fontSize}px`,
+                pointerEvents: 'none',
               }}
-              onDoubleClick={() => setIsEditing(true)}
             >
-              {memo.content || 'ダブルクリックで編集'}
+              {memo.content ? (
+                <div 
+                  dangerouslySetInnerHTML={{ __html: marked(memo.content) as string }}
+                  style={{ 
+                    backgroundColor: 'transparent',
+                    fontSize: 'inherit',
+                  }}
+                />
+              ) : (
+                <span style={{ opacity: 0.6 }}>ダブルクリックで編集</span>
+              )}
             </div>
           )}
         </div>
 
-        {/* ツールバー */}
-        <MemoToolbar
-          memo={memo}
-          settings={settings}
-          isPinned={position.pinned}
-          onEdit={() => setIsEditing(true)}
-          onTogglePin={togglePin}
-          onDelete={() => setIsDeleteDialogOpen(true)}
-          onColorChange={(color) => onUpdate({ ...memo, backgroundColor: color })}
-          onFontSizeChange={(size) => onUpdate({ ...memo, fontSize: size })}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-        />
+        {/* ツールバー（ドラッグ可能） */}
+        <div
+          style={{ cursor: 'move' }}
+          onMouseDown={handleDragStart}
+        >
+          <MemoToolbar
+            memo={memo}
+            settings={settings}
+            isPinned={position.pinned}
+            onTogglePin={togglePin}
+            onDelete={() => setIsDeleteDialogOpen(true)}
+            onColorChange={(color) => onUpdate({ ...memo, backgroundColor: color })}
+            onFontSizeChange={(size) => onUpdate({ ...memo, fontSize: size })}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+          />
+        </div>
 
         {/* リサイズハンドル */}
         <div

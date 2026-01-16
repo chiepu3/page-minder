@@ -11,4 +11,23 @@ export default defineConfig({
     optional_permissions: ['history', 'webNavigation'],
     host_permissions: ['<all_urls>'],
   },
+  vite: () => ({
+    build: {
+      // Chrome拡張機能ではUTF-8以外の文字がエラーになる
+      // 非ASCII文字をエスケープシーケンスに変換
+      target: 'esnext',
+      rollupOptions: {
+        output: {
+          // 生成されるJSで非ASCII文字をエスケープ
+          generatedCode: {
+            constBindings: true,
+          },
+        },
+      },
+    },
+    esbuild: {
+      // 非ASCII文字をUnicodeエスケープシーケンスに変換
+      charset: 'ascii',
+    },
+  }),
 });
