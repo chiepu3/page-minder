@@ -19,6 +19,7 @@ import {
   MAX_MEMO_SIZE,
   PASTEL_COLORS,
   THEMES,
+  DRAG_THRESHOLD,
 } from '@/lib/constants';
 
 interface MemoProps {
@@ -35,7 +36,9 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [animationState, setAnimationState] = useState<'enter' | 'idle' | 'exit'>('enter');
   const containerRef = useRef<HTMLDivElement>(null);
+  const prevMinimizedRef = useRef(memo.minimized);
 
   // テーマ取得
   const theme = THEMES[settings.theme === 'system' ? 'dark' : settings.theme];
@@ -76,7 +79,7 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
       const checkDragDistance = (e: MouseEvent) => {
         const dx = Math.abs(e.clientX - dragStartPosRef.current.x);
         const dy = Math.abs(e.clientY - dragStartPosRef.current.y);
-        if (dx > 5 || dy > 5) {
+        if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
           hasDraggedRef.current = true;
         }
       };
@@ -179,6 +182,25 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
   const memoTextColor = memo.textColor ?? '#333333';
   const fontSize = memo.fontSize ?? 14;
 
+  // 初回マウント時にアニメーション状態をidleに遷移
+  useEffect(() => {
+    const timer = setTimeout(() => setAnimationState('idle'), 200);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // 最小化状態が変わったらアニメーション用にトラッキング
+  useEffect(() => {
+    prevMinimizedRef.current = memo.minimized;
+  }, [memo.minimized]);
+
+  // アニメーションクラス決定
+  const getAnimationClass = () => {
+    if (animationState === 'enter') {
+      return memo.minimized ? 'pageminder-animate-minimize-enter' : 'pageminder-animate-enter';
+    }
+    return '';
+  };
+
   const baseStyle = {
     fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   };
@@ -187,30 +209,44 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
     return (
       <div
         ref={containerRef}
+        className={getAnimationClass()}
         style={{
           ...baseStyle,
           position: 'fixed',
-          left: `${dragPosition.x}px`,
-          top: `${dragPosition.y}px`,
-          width: `${MINIMIZED_SIZE.width}px`,
-          height: `${MINIMIZED_SIZE.height}px`,
-          backgroundColor: memoBgColor,
+          left: `${dragPosition.x - 8}px`,  // ヒットエリアのパディングを考慮
+          top: `${dragPosition.y - 8}px`,
+          width: `${MINIMIZED_SIZE.width + 16}px`,  // 左右8pxずつ透明パディング
+          height: `${MINIMIZED_SIZE.height + 16}px`,
           zIndex: 999999,
           cursor: 'pointer',
-          borderRadius: '8px',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          transition: 'transform 0.15s ease',
+          // 透明エリアはクリックを通さない（ドラッグ中以外）
+          pointerEvents: isDragging ? 'auto' : 'auto',
         }}
         onClick={toggleMinimize}
         onMouseDown={handleDragStart}
         title={memo.title ?? 'メモ'}
-        onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
-        onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
       >
-        <IconStickyNote size={18} color={memoTextColor} />
+        {/* 実際の見た目のアイコン部分 */}
+        <div
+          style={{
+            width: `${MINIMIZED_SIZE.width}px`,
+            height: `${MINIMIZED_SIZE.height}px`,
+            backgroundColor: memoBgColor,
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'transform 0.15s ease',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+        >
+          <IconStickyNote size={18} color={memoTextColor} />
+        </div>
       </div>
     );
   }
@@ -219,6 +255,7 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
     <>
       <div
         ref={containerRef}
+        className={getAnimationClass()}
         style={{
           ...baseStyle,
           position: position.pinned ? 'absolute' : 'fixed',

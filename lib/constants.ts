@@ -93,6 +93,12 @@ export const MINIMIZED_SIZE = {
 };
 
 /**
+ * ドラッグ判定閾値（px）
+ * この距離以上動かさないとドラッグとして判定しない
+ */
+export const DRAG_THRESHOLD = 15;
+
+/**
  * メモの最小サイズ
  */
 export const MIN_MEMO_SIZE = {

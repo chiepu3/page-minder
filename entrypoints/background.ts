@@ -11,6 +11,54 @@ const CONTEXT_MENU_ID = 'pageminder-create-memo';
 export default defineBackground(() => {
   console.log('PageMinder background script loaded', { id: browser.runtime.id });
 
+  // ==========================================================================
+  // SPA対応: URL変更検知
+  // ==========================================================================
+
+  // History API による遷移を検知 (pushState/replaceState)
+  browser.webNavigation.onHistoryStateUpdated.addListener(async (details) => {
+    // メインフレームのみ対象
+    if (details.frameId !== 0) return;
+
+    console.log('SPA navigation detected (historyStateUpdated)', {
+      tabId: details.tabId,
+      url: details.url
+    });
+
+    try {
+      await browser.tabs.sendMessage(details.tabId, {
+        action: 'URL_CHANGED',
+        payload: { url: details.url },
+      });
+    } catch (error) {
+      // Content scriptがまだロードされていない場合は無視
+      console.debug('Failed to notify content script of URL change:', error);
+    }
+  });
+
+  // ハッシュフラグメント変更を検知
+  browser.webNavigation.onReferenceFragmentUpdated.addListener(async (details) => {
+    if (details.frameId !== 0) return;
+
+    console.log('SPA navigation detected (referenceFragmentUpdated)', {
+      tabId: details.tabId,
+      url: details.url
+    });
+
+    try {
+      await browser.tabs.sendMessage(details.tabId, {
+        action: 'URL_CHANGED',
+        payload: { url: details.url },
+      });
+    } catch (error) {
+      console.debug('Failed to notify content script of URL change:', error);
+    }
+  });
+
+  // ==========================================================================
+  // コンテキストメニュー
+  // ==========================================================================
+
   // コンテキストメニューを登録
   browser.contextMenus.create({
     id: CONTEXT_MENU_ID,

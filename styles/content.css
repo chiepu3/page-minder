@@ -1,2 +1,75 @@
 /* Content Script Global Styles (injected into Shadow DOM) */
 @import "tailwindcss";
+
+/* =============================================================================
+   PageMinder - Memo Animations
+   ============================================================================= */
+
+/* メモ出現アニメーション（ふわっと浮き上がる） */
+@keyframes pageminder-memo-enter {
+    0% {
+        opacity: 0;
+        transform: translateY(8px) scale(0.98);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* メモ退出アニメーション（フェードアウト） */
+@keyframes pageminder-memo-exit {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+}
+
+/* 最小化アイコン出現（スケールイン） */
+@keyframes pageminder-minimize-enter {
+    0% {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* 展開時のアニメーション（アイコンから拡大） */
+@keyframes pageminder-expand {
+    0% {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* ユーティリティクラス */
+.pageminder-animate-enter {
+    animation: pageminder-memo-enter 0.2s ease-out forwards;
+}
+
+.pageminder-animate-exit {
+    animation: pageminder-memo-exit 0.15s ease-in forwards;
+}
+
+.pageminder-animate-minimize-enter {
+    animation: pageminder-minimize-enter 0.2s ease-out forwards;
+}
+
+.pageminder-animate-expand {
+    animation: pageminder-expand 0.2s ease-out forwards;
+}

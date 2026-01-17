@@ -207,7 +207,8 @@ export type MessageAction =
     | 'CREATE_MEMO'
     | 'GET_MEMOS_FOR_URL'
     | 'SCROLL_TO_MEMO'
-    | 'MOVE_MEMO_TO_VISIBLE';
+    | 'MOVE_MEMO_TO_VISIBLE'
+    | 'URL_CHANGED';
 
 /**
  * メッセージ構造

@@ -8,6 +8,7 @@ import { Memo } from './Memo';
 import { storage } from '@/lib/storage';
 import { matchAnyUrlPattern } from '@/lib/url-matcher';
 import { logger } from '@/lib/logger';
+import { useUrlWatcher } from '@/hooks/useUrlWatcher';
 
 import { DEFAULT_SETTINGS } from '@/lib/constants';
 
@@ -19,11 +20,34 @@ export function MemoContainer() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
 
+  // メモ読み込み関数（URL変更時にも呼ばれる）
+  const loadMemos = useCallback(async () => {
+    try {
+      const allMemos = await storage.getMemos();
+      const currentUrl = window.location.href;
+      const matchingMemos = allMemos.filter((memo) =>
+        matchAnyUrlPattern(currentUrl, memo.urlPatterns)
+      );
+      logger.info('Memos loaded for URL', { url: currentUrl, count: matchingMemos.length });
+      setMemos(matchingMemos);
+    } catch (error) {
+      logger.error('Failed to load memos', { error: String(error) });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // SPA対応: URL変更を検知してメモを再評価
+  useUrlWatcher(useCallback((newUrl: string) => {
+    logger.info('URL changed, reloading memos', { newUrl });
+    loadMemos();
+  }, [loadMemos]));
+
   // 初回ロード
   useEffect(() => {
     loadMemos();
     loadSettings();
-  }, []);
+  }, [loadMemos]);
 
   const loadSettings = async () => {
     try {
@@ -104,6 +128,14 @@ export function MemoContainer() {
         sendResponse({ success: true });
       }
 
+      // SPA対応: URL変更通知（background scriptから）
+      if (message.action === 'URL_CHANGED') {
+        const { url } = message.payload as { url: string };
+        logger.info('URL changed (SPA navigation)', { url });
+        loadMemos();
+        sendResponse({ success: true });
+      }
+
       return true;
     };
 
@@ -113,20 +145,8 @@ export function MemoContainer() {
     };
   }, [memos]);
 
-  const loadMemos = async () => {
-    try {
-      const allMemos = await storage.getMemos();
-      const currentUrl = window.location.href;
-      const matchingMemos = allMemos.filter((memo) =>
-        matchAnyUrlPattern(currentUrl, memo.urlPatterns)
-      );
-      setMemos(matchingMemos);
-    } catch (error) {
-      logger.error('Failed to load memos', { error: String(error) });
-    } finally {
-      setLoading(false);
-    }
-  };
+
+
 
   const handleMemoUpdate = useCallback(async (updatedMemo: MemoType) => {
     await storage.saveMemo(updatedMemo);
