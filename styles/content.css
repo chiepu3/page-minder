@@ -18,7 +18,7 @@
     }
 }
 
-/* メモ退出アニメーション（フェードアウト） */
+/* メモ退出アニメーション（フェードアウト＆縮小） */
 @keyframes pageminder-memo-exit {
     0% {
         opacity: 1;
@@ -27,15 +27,33 @@
 
     100% {
         opacity: 0;
-        transform: scale(0.95);
+        transform: scale(0.9);
     }
 }
 
-/* 最小化アイコン出現（スケールイン） */
+/* 最小化時：展開メモ → アイコンへ縮小 */
+@keyframes pageminder-shrink-to-icon {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(0.3);
+    }
+}
+
+/* 最小化アイコン出現（バウンスイン） */
 @keyframes pageminder-minimize-enter {
     0% {
         opacity: 0;
-        transform: scale(0.5);
+        transform: scale(0);
+    }
+
+    60% {
+        opacity: 1;
+        transform: scale(1.2);
     }
 
     100% {
@@ -44,32 +62,53 @@
     }
 }
 
-/* 展開時のアニメーション（アイコンから拡大） */
+/* 展開時：アイコン → 展開メモへ拡大 */
 @keyframes pageminder-expand {
     0% {
         opacity: 0;
-        transform: scale(0.5);
+        transform: scale(0.3);
     }
 
     100% {
         opacity: 1;
         transform: scale(1);
+    }
+}
+
+/* 削除時フェードアウト */
+@keyframes pageminder-delete {
+    0% {
+        opacity: 1;
+        transform: scale(1) translateX(0);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(0.8) translateX(20px);
     }
 }
 
 /* ユーティリティクラス */
 .pageminder-animate-enter {
-    animation: pageminder-memo-enter 0.2s ease-out forwards;
+    animation: pageminder-memo-enter 0.25s ease-out forwards;
 }
 
 .pageminder-animate-exit {
-    animation: pageminder-memo-exit 0.15s ease-in forwards;
+    animation: pageminder-memo-exit 0.2s ease-in forwards;
+}
+
+.pageminder-animate-shrink {
+    animation: pageminder-shrink-to-icon 0.2s ease-in forwards;
 }
 
 .pageminder-animate-minimize-enter {
-    animation: pageminder-minimize-enter 0.2s ease-out forwards;
+    animation: pageminder-minimize-enter 0.3s ease-out forwards;
 }
 
 .pageminder-animate-expand {
-    animation: pageminder-expand 0.2s ease-out forwards;
+    animation: pageminder-expand 0.25s ease-out forwards;
+}
+
+.pageminder-animate-delete {
+    animation: pageminder-delete 0.2s ease-in forwards;
 }

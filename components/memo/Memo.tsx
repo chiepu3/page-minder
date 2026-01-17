@@ -36,7 +36,9 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [animationState, setAnimationState] = useState<'enter' | 'idle' | 'exit'>('enter');
+  // アニメーション状態: enter=出現, idle=通常, shrink=最小化中, expand=展開中, exit=削除中
+  const [animationState, setAnimationState] = useState<'enter' | 'idle' | 'shrink' | 'expand' | 'exit'>('enter');
+  const [isDeleting, setIsDeleting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevMinimizedRef = useRef(memo.minimized);
 
@@ -184,21 +186,44 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
 
   // 初回マウント時にアニメーション状態をidleに遷移
   useEffect(() => {
-    const timer = setTimeout(() => setAnimationState('idle'), 200);
+    const timer = setTimeout(() => setAnimationState('idle'), 250);
     return () => clearTimeout(timer);
   }, []);
 
-  // 最小化状態が変わったらアニメーション用にトラッキング
+  // 最小化/展開の遷移を検知してアニメーション適用
   useEffect(() => {
-    prevMinimizedRef.current = memo.minimized;
-  }, [memo.minimized]);
+    if (animationState === 'idle' || animationState === 'enter') {
+      if (prevMinimizedRef.current !== memo.minimized) {
+        // 最小化状態が変わった
+        if (memo.minimized) {
+          // 展開 → 最小化（アイコンのバウンスイン）
+          setAnimationState('enter');
+        } else {
+          // 最小化 → 展開（展開アニメーション）
+          setAnimationState('expand');
+        }
+        // アニメーション完了後にidleに戻す
+        const timer = setTimeout(() => setAnimationState('idle'), 300);
+        prevMinimizedRef.current = memo.minimized;
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [memo.minimized, animationState]);
 
   // アニメーションクラス決定
   const getAnimationClass = () => {
-    if (animationState === 'enter') {
-      return memo.minimized ? 'pageminder-animate-minimize-enter' : 'pageminder-animate-enter';
+    switch (animationState) {
+      case 'enter':
+        return memo.minimized ? 'pageminder-animate-minimize-enter' : 'pageminder-animate-enter';
+      case 'expand':
+        return 'pageminder-animate-expand';
+      case 'shrink':
+        return 'pageminder-animate-shrink';
+      case 'exit':
+        return 'pageminder-animate-delete';
+      default:
+        return '';
     }
-    return '';
   };
 
   const baseStyle = {
@@ -398,8 +423,14 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
           confirmText="削除"
           cancelText="キャンセル"
           onConfirm={() => {
-            onDelete(memo.id);
             setIsDeleteDialogOpen(false);
+            // 削除アニメーション開始
+            setAnimationState('exit');
+            setIsDeleting(true);
+            // アニメーション完了後に実際に削除
+            setTimeout(() => {
+              onDelete(memo.id);
+            }, 200);
           }}
           onCancel={() => setIsDeleteDialogOpen(false)}
           isDanger={true}
