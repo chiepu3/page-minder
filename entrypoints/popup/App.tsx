@@ -170,7 +170,23 @@ function App() {
         }
     }, []);
 
-    const handleOpenSettings = useCallback(() => {
+    // メモの設定を開く
+    const handleOpenSettings = useCallback(async (memoId: string) => {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab?.id) {
+                await chrome.tabs.sendMessage(tab.id, {
+                    action: 'OPEN_MEMO_SETTINGS',
+                    payload: { memoId },
+                });
+            }
+            window.close();
+        } catch (err) {
+            console.error('Failed to open memo settings:', err);
+        }
+    }, []);
+
+    const handleOpenGlobalSettings = useCallback(() => {
         chrome.runtime.openOptionsPage();
     }, []);
 
@@ -237,6 +253,7 @@ function App() {
                         memos={memos}
                         onJump={handleJump}
                         onRecall={handleRecall}
+                        onOpenSettings={handleOpenSettings}
                         onDelete={handleDelete}
                         onReorder={handleReorder}
                     />
@@ -249,7 +266,7 @@ function App() {
                     テーマ
                 </button>
                 <div style={{ flex: 1 }} />
-                <button className="popup-footer-button" onClick={handleOpenSettings}>
+                <button className="popup-footer-button" onClick={handleOpenGlobalSettings}>
                     <IconSettings size={18} color="currentColor" />
                     全体設定
                 </button>

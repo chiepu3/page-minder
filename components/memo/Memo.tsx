@@ -27,12 +27,24 @@ interface MemoProps {
   settings: GlobalSettings;
   onUpdate: (memo: MemoType) => void;
   onDelete: (memoId: string) => void;
+  /** アクティブ化トリガーで表示されている場合true */
+  isActivated?: boolean;
+  /** 要素ピッカーを起動するコールバック */
+  onStartElementPicker?: () => void;
+  /** 設定モーダルを自動的に開く */
+  shouldOpenSettings?: boolean;
+  /** 設定モーダルが開かれた時のコールバック */
+  onSettingsOpened?: () => void;
+  /** アクティブ化の一時停止 */
+  onPauseActivation?: (reason: string) => void;
+  /** アクティブ化の一時停止解除 */
+  onResumeActivation?: (reason: string) => void;
 }
 
 /**
  * 個別メモコンポーネント
  */
-export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
+export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, onStartElementPicker, shouldOpenSettings, onSettingsOpened, onPauseActivation, onResumeActivation }: MemoProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -41,6 +53,24 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevMinimizedRef = useRef(memo.minimized);
+
+  // セレクタ選択後に設定モーダルを自動的に開く
+  useEffect(() => {
+    if (shouldOpenSettings) {
+      setIsSettingsOpen(true);
+    }
+  }, [shouldOpenSettings]);
+
+
+
+  // アクティブ化の一時停止制御（設定中）
+  useEffect(() => {
+    if (isSettingsOpen) {
+      onPauseActivation?.('settings');
+    } else {
+      onResumeActivation?.('settings');
+    }
+  }, [isSettingsOpen, onPauseActivation, onResumeActivation]);
 
   // テーマ取得
   const theme = THEMES[settings.theme === 'system' ? 'dark' : settings.theme];
@@ -67,6 +97,15 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
     },
     disabled: isEditing,
   });
+
+  // アクティブ化の一時停止制御（ドラッグ中）
+  useEffect(() => {
+    if (isDragging) {
+      onPauseActivation?.('drag');
+    } else {
+      onResumeActivation?.('drag');
+    }
+  }, [isDragging, onPauseActivation, onResumeActivation]);
 
   // カスタムドラッグ開始ハンドラ（開始位置を記録）
   const handleDragStart = (e: React.MouseEvent) => {
@@ -410,7 +449,15 @@ export function Memo({ memo, settings, onUpdate, onDelete }: MemoProps) {
           memo={memo}
           settings={settings}
           onUpdate={onUpdate}
-          onClose={() => setIsSettingsOpen(false)}
+          onClose={() => {
+            setIsSettingsOpen(false);
+            onSettingsOpened?.(); // モーダル閉じる時にフラグクリア
+          }}
+          onStartElementPicker={() => {
+            setIsSettingsOpen(false); // モーダルを閉じる
+            onStartElementPicker?.(); // 親に伝える
+          }}
+          initialTab={shouldOpenSettings ? 'activation' : 'general'}
         />
       )}
 

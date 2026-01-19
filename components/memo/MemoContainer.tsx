@@ -5,10 +5,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Memo as MemoType, Message } from '@/types';
 import { Memo } from './Memo';
+import { ElementPicker } from './ElementPicker';
+import { ActivationOverlay } from './ActivationOverlay';
 import { storage } from '@/lib/storage';
 import { matchAnyUrlPattern } from '@/lib/url-matcher';
 import { logger } from '@/lib/logger';
 import { useUrlWatcher } from '@/hooks/useUrlWatcher';
+import { useActivation } from '@/hooks/useActivation';
 
 import { DEFAULT_SETTINGS } from '@/lib/constants';
 
@@ -19,6 +22,26 @@ export function MemoContainer() {
   const [memos, setMemos] = useState<MemoType[]>([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const [showElementPicker, setShowElementPicker] = useState(false);
+  const [pickerTargetMemoId, setPickerTargetMemoId] = useState<string | null>(null);
+  const [reopenSettingsForMemoId, setReopenSettingsForMemoId] = useState<string | null>(null);
+
+  // アクティブ化状態管理
+  const [activatedMemos, setActivatedMemos] = useState<Map<string, Element>>(new Map());
+
+  const { deactivateMemo, pauseDeactivation, resumeDeactivation } = useActivation(memos, {
+    onActivate: (memoId, triggerElement) => {
+      setActivatedMemos(prev => new Map(prev).set(memoId, triggerElement));
+    },
+    onDeactivate: (memoId) => {
+      setActivatedMemos(prev => {
+        const next = new Map(prev);
+        next.delete(memoId);
+        return next;
+      });
+    },
+    settings,
+  });
 
   // メモ読み込み関数（URL変更時にも呼ばれる）
   const loadMemos = useCallback(async () => {
@@ -136,6 +159,14 @@ export function MemoContainer() {
         sendResponse({ success: true });
       }
 
+      // ポップアップからのメモ設定を開く通知
+      if (message.action === 'OPEN_MEMO_SETTINGS') {
+        const { memoId } = message.payload as { memoId: string };
+        // reopenSettingsForMemoIdを設定することで、Memoコンポーネントが設定モーダルを開く
+        setReopenSettingsForMemoId(memoId);
+        sendResponse({ success: true });
+      }
+
       return true;
     };
 
@@ -160,21 +191,110 @@ export function MemoContainer() {
     setMemos((prev) => prev.filter((m) => m.id !== memoId));
   }, []);
 
+  // ElementPicker起動ハンドラ
+  const handleStartElementPicker = useCallback((memoId: string) => {
+    setPickerTargetMemoId(memoId);
+    setShowElementPicker(true);
+  }, []);
+
+  // セレクタ選択完了ハンドラ
+  const handleSelectorSelected = useCallback(async (selector: string) => {
+    if (pickerTargetMemoId) {
+      const targetMemo = memos.find(m => m.id === pickerTargetMemoId);
+      if (targetMemo) {
+        // activation設定がなければデフォルトを作成
+        const currentActivation = targetMemo.activation ?? {
+          enabled: true,
+          trigger: 'hover' as const,
+          selector: '',
+          delay: 500,
+          positionMode: 'near-element' as const,
+          offsetX: 10,
+          offsetY: 10,
+          highlightElement: true,
+          highlightColor: 'rgba(255, 193, 7, 0.3)',
+          hideCondition: 'trigger-end' as const,
+          hideDelay: 5000,
+          clickStopPropagation: true,
+        };
+        
+        const updatedMemo = {
+          ...targetMemo,
+          activation: { ...currentActivation, selector, enabled: true }, // enabledを明示的にtrueに
+        };
+        
+        // 設定モーダルを再開するためのフラグを【先に】設定（メモ更新でフィルタが適用される前に）
+        setReopenSettingsForMemoId(pickerTargetMemoId);
+        
+        await handleMemoUpdate(updatedMemo);
+      }
+    }
+    setShowElementPicker(false);
+    setPickerTargetMemoId(null);
+  }, [pickerTargetMemoId, memos, handleMemoUpdate]);
+
   if (loading) {
     return null;
   }
 
+  // ElementPicker表示中はピッカーのみ表示
+  if (showElementPicker) {
+    return (
+      <ElementPicker
+        onSelect={handleSelectorSelected}
+        onCancel={() => {
+          setShowElementPicker(false);
+          setPickerTargetMemoId(null);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="pageminder-container">
-      {memos.map((memo) => (
+      {/* 通常のメモ表示（アクティブ化されていないもの、または設定中のもの） */}
+      {memos.filter(memo => {
+        // アクティブ化が無効なら表示
+        if (!memo.activation?.enabled) return true;
+        // 設定作業中なら表示（アクティブ化設定直後の編集のため）
+        if (reopenSettingsForMemoId === memo.id) return true;
+        // それ以外（アクティブ化有効かつ設定中でない）は非表示
+        return false;
+      }).map((memo) => (
         <Memo
           key={memo.id}
           memo={memo}
           settings={settings}
           onUpdate={handleMemoUpdate}
           onDelete={handleMemoDelete}
+          onStartElementPicker={() => {
+            setPickerTargetMemoId(memo.id);
+            setShowElementPicker(true);
+          }}
+          shouldOpenSettings={reopenSettingsForMemoId === memo.id}
+          onSettingsOpened={() => setReopenSettingsForMemoId(null)}
+          onPauseActivation={(reason) => pauseDeactivation(memo.id, reason)}
+          onResumeActivation={(reason) => resumeDeactivation(memo.id, reason)}
         />
       ))}
+
+      {/* アクティブ化されたメモのオーバーレイ表示 */}
+      {Array.from(activatedMemos.entries()).map(([memoId, triggerElement]) => {
+        const memo = memos.find(m => m.id === memoId);
+        if (!memo) return null;
+        return (
+          <ActivationOverlay
+            key={`activated-${memoId}`}
+            memo={memo}
+            triggerElement={triggerElement}
+            settings={settings}
+            onUpdate={handleMemoUpdate}
+            onPauseActivation={(reason) => pauseDeactivation(memo.id, reason)}
+            onResumeActivation={(reason) => resumeDeactivation(memo.id, reason)}
+            onClose={() => deactivateMemo(memoId)}
+          />
+        );
+      })}
     </div>
   );
 }

@@ -42,6 +42,8 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
     colorPalette: COLOR_PALETTE,
     logLevel: 'info',
     enableHistory: false,
+    activationShowDelay: 500,
+    activationHideGracePeriod: 300,
 };
 
 /**

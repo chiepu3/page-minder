@@ -11,6 +11,7 @@ interface MemoListProps {
     memos: Memo[];
     onJump: (memoId: string) => void;
     onRecall: (memoId: string) => void;
+    onOpenSettings: (memoId: string) => void;
     onDelete: (memoId: string) => void;
     onReorder: (memos: Memo[]) => void;
 }
@@ -18,7 +19,7 @@ interface MemoListProps {
 /**
  * メモ一覧表示コンポーネント
  */
-export function MemoList({ memos, onJump, onRecall, onDelete, onReorder }: MemoListProps) {
+export function MemoList({ memos, onJump, onRecall, onOpenSettings, onDelete, onReorder }: MemoListProps) {
     const [draggedMemoId, setDraggedMemoId] = useState<string | null>(null);
 
     const handleDragStart = (e: React.DragEvent, memoId: string) => {
@@ -88,6 +89,7 @@ export function MemoList({ memos, onJump, onRecall, onDelete, onReorder }: MemoL
                         memo={memo}
                         onJump={onJump}
                         onRecall={onRecall}
+                        onOpenSettings={onOpenSettings}
                         onDelete={onDelete}
                         onDragStart={handleDragStart}
                         onDragOver={handleDragOver}

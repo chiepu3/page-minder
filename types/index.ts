@@ -89,13 +89,22 @@ export type ActivationTrigger = 'hover' | 'click' | 'focus' | 'info-icon';
 export type PositionMode = 'near-element' | 'fixed-position';
 
 /**
+ * 非表示条件
+ */
+export type HideCondition =
+    | 'manual'           // ユーザーが明示的に閉じるまで表示
+    | 'trigger-end'      // トリガー解除時（hover解除、focus外れなど）
+    | 'timeout'          // 一定時間経過後
+    | 'click-outside';   // メモ外クリック時
+
+/**
  * アクティブ化設定
  */
 export interface ActivationConfig {
     enabled: boolean;
     trigger: ActivationTrigger;
     selector: string;                    // CSSセレクタ
-    delay?: number;                      // hover時の遅延（ms）
+    delay?: number;                      // hover時の遅延（ms）、デフォルト: 500
 
     // 表示位置
     positionMode: PositionMode;
@@ -105,6 +114,13 @@ export interface ActivationConfig {
     // 強調表示
     highlightElement?: boolean;          // トリガー時に要素をハイライト
     highlightColor?: string;             // ハイライト色
+
+    // 非表示条件
+    hideCondition: HideCondition;        // デフォルト: 'trigger-end'
+    hideDelay?: number;                  // timeout時の遅延（ms）
+
+    // clickトリガー設定
+    clickStopPropagation?: boolean;      // 初回クリック時にイベント伝播を止める
 }
 
 // -----------------------------------------------------------------------------
@@ -127,6 +143,10 @@ export interface GlobalSettings {
     colorPalette: string[];              // パステルカラーパレット
     logLevel: LogLevel;
     enableHistory: boolean;              // 履歴機能の有効/無効
+
+    // アクティブ化設定（グローバル）
+    activationShowDelay: number;         // ホバー時の表示遅延（ms）、デフォルト: 500
+    activationHideGracePeriod: number;   // 非表示までの猶予時間（ms）、デフォルト: 300
 }
 
 // -----------------------------------------------------------------------------
@@ -208,7 +228,8 @@ export type MessageAction =
     | 'GET_MEMOS_FOR_URL'
     | 'SCROLL_TO_MEMO'
     | 'MOVE_MEMO_TO_VISIBLE'
-    | 'URL_CHANGED';
+    | 'URL_CHANGED'
+    | 'OPEN_MEMO_SETTINGS';
 
 /**
  * メッセージ構造

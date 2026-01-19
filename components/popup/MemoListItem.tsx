@@ -4,12 +4,13 @@
 
 import { useState } from 'react';
 import type { Memo } from '@/types';
-import { IconNote, IconArrowForward, IconStickyNote, IconDelete, IconDragHandle } from '@/components/icons';
+import { IconNote, IconArrowForward, IconStickyNote, IconDelete, IconDragHandle, IconSettings } from '@/components/icons';
 
 interface MemoListItemProps {
     memo: Memo;
     onJump: (memoId: string) => void;
     onRecall: (memoId: string) => void;
+    onOpenSettings: (memoId: string) => void;
     onDelete: (memoId: string) => void;
     onDragStart: (e: React.DragEvent, memoId: string) => void;
     onDragOver: (e: React.DragEvent) => void;
@@ -23,7 +24,8 @@ interface MemoListItemProps {
 export function MemoListItem({ 
     memo, 
     onJump, 
-    onRecall, 
+    onRecall,
+    onOpenSettings,
     onDelete,
     onDragStart,
     onDragOver,
@@ -83,6 +85,14 @@ export function MemoListItem({
                 >
                     <IconStickyNote size={14} color="currentColor" />
                     呼び出し
+                </button>
+                <button
+                    className="memo-list-item-button memo-list-item-button-secondary"
+                    onClick={() => onOpenSettings(memo.id)}
+                    title="メモの設定を開く"
+                >
+                    <IconSettings size={14} color="currentColor" />
+                    設定
                 </button>
                 <button
                     className={`memo-list-item-button ${showDeleteConfirm ? 'memo-list-item-button-danger' : ''}`}
