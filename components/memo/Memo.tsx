@@ -257,23 +257,23 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
 
   // 最小化/展開の遷移を検知してアニメーション適用
   useEffect(() => {
-    if (animationState === 'idle' || animationState === 'enter') {
-      if (prevMinimizedRef.current !== memo.minimized) {
-        // 最小化状態が変わった
-        if (memo.minimized) {
-          // 展開 → 最小化（アイコンのバウンスイン）
-          setAnimationState('enter');
-        } else {
-          // 最小化 → 展開（展開アニメーション）
-          setAnimationState('expand');
-        }
-        // アニメーション完了後にidleに戻す
-        const timer = setTimeout(() => setAnimationState('idle'), 300);
-        prevMinimizedRef.current = memo.minimized;
-        return () => clearTimeout(timer);
+    // 前回の状態と異なる場合のみ処理
+    if (prevMinimizedRef.current !== memo.minimized) {
+      // 最小化状態が変わった
+      if (memo.minimized) {
+        // 展開 → 最小化（アイコンのバウンスイン）
+        setAnimationState('enter');
+      } else {
+        // 最小化 → 展開（展開アニメーション）
+        setAnimationState('expand');
       }
+      prevMinimizedRef.current = memo.minimized;
+      
+      // アニメーション完了後にidleに戻す
+      const timer = setTimeout(() => setAnimationState('idle'), 300);
+      return () => clearTimeout(timer);
     }
-  }, [memo.minimized, animationState]);
+  }, [memo.minimized]);
 
   // アニメーションクラス決定
   const getAnimationClass = () => {
@@ -362,7 +362,9 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          border: `1px solid ${theme.border}33`, // テーマに合わせた微細なボーダー
+          border: `1px solid ${theme.border}33`,
+          // アニメーション終了後にtransformをリセット
+          transform: animationState === 'idle' ? 'none' : undefined,
         }}
       >
         {/* ドラッグハンドル（タイトルバー） */}
@@ -410,7 +412,16 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             display: 'flex',
             flexDirection: 'column',
           }}
-          onMouseDown={!isEditing ? handleDragStart : undefined}
+          onMouseDown={(e) => {
+            // リンクをクリックした場合はドラッグを開始しない
+            const target = e.target as HTMLElement;
+            if (target.tagName === 'A' || target.closest('a')) {
+              return; // リンククリック時はドラッグ処理をスキップ
+            }
+            if (!isEditing) {
+              handleDragStart(e);
+            }
+          }}
           onDoubleClick={!isEditing ? () => setIsEditing(true) : undefined}
         >
           {isEditing ? (
@@ -430,6 +441,18 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
                 flex: 1,
                 fontSize: `${fontSize}px`,
                 overflow: 'auto',
+              }}
+              onClick={(e) => {
+                // リンククリック処理
+                const target = e.target as HTMLElement;
+                if (target.tagName === 'A') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const href = target.getAttribute('href');
+                  if (href) {
+                    window.open(href, '_blank', 'noopener,noreferrer');
+                  }
+                }
               }}
             >
               {memo.content ? (

@@ -90,7 +90,8 @@
 
 /* ユーティリティクラス */
 .pageminder-animate-enter {
-    animation: pageminder-memo-enter 0.25s ease-out forwards;
+    animation: pageminder-memo-enter 0.25s ease-out;
+    transform-origin: center center;
 }
 
 .pageminder-animate-exit {
@@ -102,11 +103,13 @@
 }
 
 .pageminder-animate-minimize-enter {
-    animation: pageminder-minimize-enter 0.3s ease-out forwards;
+    animation: pageminder-minimize-enter 0.3s ease-out;
+    transform-origin: center center;
 }
 
 .pageminder-animate-expand {
-    animation: pageminder-expand 0.25s ease-out forwards;
+    animation: pageminder-expand 0.25s ease-out;
+    transform-origin: center center;
 }
 
 .pageminder-animate-delete {
