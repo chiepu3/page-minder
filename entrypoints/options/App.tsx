@@ -58,6 +58,16 @@ function App() {
         }
     }, []);
 
+    // メモ更新
+    const handleUpdateMemo = useCallback(async (updatedMemo: Memo) => {
+        try {
+            await storage.saveMemo(updatedMemo);
+            setMemos((prev) => prev.map((m) => m.id === updatedMemo.id ? updatedMemo : m));
+        } catch (err) {
+            console.error('Failed to update memo:', err);
+        }
+    }, []);
+
     // 設定保存
     const handleSaveSettings = useCallback(async (newSettings: GlobalSettings) => {
         try {
@@ -106,7 +116,7 @@ function App() {
             {/* Header */}
             <header className="options-header">
                 <div className="options-header-left">
-                    <IconStickyNote className="options-header-icon" />
+                    <IconStickyNote size={32} color="var(--options-accent)" />
                     <h1 className="options-title">PageMinder 設定</h1>
                 </div>
                 <button
@@ -138,6 +148,7 @@ function App() {
                     <MemoTable
                         memos={memos}
                         onDelete={handleDeleteMemo}
+                        onUpdate={handleUpdateMemo}
                         onRefresh={loadData}
                     />
                 )}

@@ -447,7 +447,7 @@ export function SettingsModal({ memo, settings, onUpdate, onClose, onStartElemen
                     <label style={labelStyle}>非表示条件</label>
                     {activation.trigger === 'click' && (
                       <div style={{ fontSize: '11px', color: theme.textSecondary, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <IconInfo size={12} /> クリックトリガーの場合、対象要素をもう一度クリックすると常に非表示になります（トグル動作）。
+                        <IconNote size={12} /> クリックトリガーの場合、対象要素をもう一度クリックすると常に非表示になります（トグル動作）。
                         さらに以下の条件でも非表示にできます：
                       </div>
                     )}

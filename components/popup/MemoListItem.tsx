@@ -33,8 +33,25 @@ export function MemoListItem({
     onDragEnd,
 }: MemoListItemProps) {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-    const displayTitle = memo.title || memo.content.slice(0, 30) || '無題のメモ';
-    const preview = memo.content.slice(0, 50) + (memo.content.length > 50 ? '...' : '');
+    
+    // Markdownからプレーンテキストを抽出（記号を除去）
+    const stripMarkdown = (text: string): string => {
+        return text
+            .replace(/^#{1,6}\s+/gm, '')  // 見出し
+            .replace(/\*\*(.+?)\*\*/g, '$1')  // 太字
+            .replace(/\*(.+?)\*/g, '$1')  // 斜体
+            .replace(/~~(.+?)~~/g, '$1')  // 取り消し線
+            .replace(/`(.+?)`/g, '$1')  // インラインコード
+            .replace(/\[(.+?)\]\(.+?\)/g, '$1')  // リンク
+            .replace(/^[\-\*\+]\s+/gm, '')  // 箇条書き
+            .replace(/^\d+\.\s+/gm, '')  // 番号付きリスト
+            .replace(/\n+/g, ' ')  // 改行をスペースに
+            .trim();
+    };
+    
+    // タイトル: memo.title があればそれ、なければ内容から抽出
+    const displayTitle = memo.title || stripMarkdown(memo.content).slice(0, 30) || '無題のメモ';
+    const preview = stripMarkdown(memo.content).slice(0, 50) + (memo.content.length > 50 ? '...' : '');
 
     const handleDeleteClick = () => {
         if (showDeleteConfirm) {
@@ -70,43 +87,42 @@ export function MemoListItem({
                 <div className="memo-list-item-preview">{preview}</div>
             )}
             <div className="memo-list-item-actions">
-                <button
-                    className="memo-list-item-button"
-                    onClick={() => onJump(memo.id)}
-                    title="メモの位置にジャンプ"
-                >
-                    <IconArrowForward size={14} color="currentColor" />
-                    ジャンプ
-                </button>
-                <button
-                    className="memo-list-item-button memo-list-item-button-secondary"
-                    onClick={() => onRecall(memo.id)}
-                    title="メモを左上に呼び出す"
-                >
-                    <IconStickyNote size={14} color="currentColor" />
-                    呼び出し
-                </button>
-                <button
-                    className="memo-list-item-button memo-list-item-button-secondary"
-                    onClick={() => onOpenSettings(memo.id)}
-                    title="メモの設定を開く"
-                >
-                    <IconSettings size={14} color="currentColor" />
-                    設定
-                </button>
-                <button
-                    className={`memo-list-item-button ${showDeleteConfirm ? 'memo-list-item-button-danger' : ''}`}
-                    onClick={handleDeleteClick}
-                    title={showDeleteConfirm ? '本当に削除？' : 'メモを削除'}
-                    style={{
-                        marginLeft: 'auto',
-                        backgroundColor: showDeleteConfirm ? '#ef444420' : undefined,
-                        color: showDeleteConfirm ? '#ef4444' : undefined,
-                    }}
-                >
-                    <IconDelete size={14} color={showDeleteConfirm ? '#ef4444' : 'currentColor'} />
-                    {showDeleteConfirm ? '削除確認' : '削除'}
-                </button>
+                <div className="memo-list-item-actions-row">
+                    <button
+                        className="memo-list-item-button"
+                        onClick={() => onJump(memo.id)}
+                        title="メモの位置にジャンプ"
+                    >
+                        <IconArrowForward size={14} color="currentColor" />
+                        ジャンプ
+                    </button>
+                    <button
+                        className="memo-list-item-button"
+                        onClick={() => onRecall(memo.id)}
+                        title="メモを左上に呼び出す"
+                    >
+                        <IconStickyNote size={14} color="currentColor" />
+                        呼び出し
+                    </button>
+                </div>
+                <div className="memo-list-item-actions-row">
+                    <button
+                        className="memo-list-item-button"
+                        onClick={() => onOpenSettings(memo.id)}
+                        title="メモの設定を開く"
+                    >
+                        <IconSettings size={14} color="currentColor" />
+                        設定
+                    </button>
+                    <button
+                        className={`memo-list-item-button memo-list-item-button-danger-hover ${showDeleteConfirm ? 'memo-list-item-button-danger' : ''}`}
+                        onClick={handleDeleteClick}
+                        title={showDeleteConfirm ? '本当に削除？' : 'メモを削除'}
+                    >
+                        <IconDelete size={14} color={showDeleteConfirm ? '#ef4444' : 'currentColor'} />
+                        {showDeleteConfirm ? '確認' : '削除'}
+                    </button>
+                </div>
             </div>
         </div>
     );

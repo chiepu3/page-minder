@@ -2,8 +2,8 @@
 // PageMinder - Memo Component
 // =============================================================================
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { marked } from 'marked';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { marked, Renderer } from 'marked';
 import { Memo as MemoType, MemoPosition, GlobalSettings } from '@/types';
 import { MemoToolbar } from './MemoToolbar';
 import { MemoEditor } from './MemoEditor';
@@ -53,6 +53,32 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
   const [isDeleting, setIsDeleting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevMinimizedRef = useRef(memo.minimized);
+
+  // markedのカスタムレンダラー: リンクを新しいタブで開く
+  const customRenderer = useMemo(() => {
+    const renderer = new Renderer();
+    renderer.link = ({ href, title, text }) => {
+      const titleAttr = title ? ` title="${title}"` : '';
+      return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+    };
+    return renderer;
+  }, []);
+
+  // Markdownをパース（リンクは新しいタブで開く）
+  const parsedContent = useMemo(() => {
+    if (!memo.content) return '';
+    return marked(memo.content, { renderer: customRenderer }) as string;
+  }, [memo.content, customRenderer]);
+
+  // h1からタイトルを自動抽出（タイトルが未設定の場合）
+  useEffect(() => {
+    if (!memo.title && memo.content) {
+      const h1Match = memo.content.match(/^#\s+(.+)$/m);
+      if (h1Match && h1Match[1]) {
+        onUpdate({ ...memo, title: h1Match[1].trim() });
+      }
+    }
+  }, [memo.content]);
 
   // セレクタ選択後に設定モーダルを自動的に開く
   useEffect(() => {
@@ -376,36 +402,46 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
 
         {/* コンテンツエリア */}
         <div 
-          style={{ flex: 1, overflowY: 'auto', padding: '12px', cursor: isEditing ? 'default' : 'move' }}
+          style={{ 
+            flex: 1, 
+            overflow: 'hidden',  // 基本はhidden、内部でスクロール制御
+            padding: '12px', 
+            cursor: isEditing ? 'text' : 'pointer',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
           onMouseDown={!isEditing ? handleDragStart : undefined}
           onDoubleClick={!isEditing ? () => setIsEditing(true) : undefined}
         >
           {isEditing ? (
-            <MemoEditor
-              content={memo.content}
-              settings={settings}
-              onSave={handleSaveContent}
-              onCancel={() => setIsEditing(false)}
-              onChange={(newContent) => { pendingContentRef.current = newContent; }}
-            />
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <MemoEditor
+                content={memo.content}
+                settings={settings}
+                onSave={handleSaveContent}
+                onCancel={() => setIsEditing(false)}
+                onChange={(newContent) => { pendingContentRef.current = newContent; }}
+              />
+            </div>
           ) : (
             <div
+              data-memo-id={memo.id}
               style={{ 
-                minHeight: '100%',
+                flex: 1,
                 fontSize: `${fontSize}px`,
-                pointerEvents: 'none',
+                overflow: 'auto',
               }}
             >
               {memo.content ? (
                 <div 
-                  dangerouslySetInnerHTML={{ __html: marked(memo.content) as string }}
+                  dangerouslySetInnerHTML={{ __html: parsedContent }}
                   style={{ 
                     backgroundColor: 'transparent',
                     fontSize: 'inherit',
                   }}
                 />
               ) : (
-                <span style={{ opacity: 0.6 }}>ダブルクリックで編集</span>
+                <span style={{ opacity: 0.6, display: 'block', textAlign: 'center', marginTop: '20px' }}>ダブルクリックで編集</span>
               )}
             </div>
           )}

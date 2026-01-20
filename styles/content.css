@@ -112,3 +112,148 @@
 .pageminder-animate-delete {
     animation: pageminder-delete 0.2s ease-in forwards;
 }
+
+/* =============================================================================
+   PageMinder - Markdown Styles
+   ============================================================================= */
+
+/* ヘッダー */
+[data-memo-id] h1 {
+    font-size: 1.2em;
+    font-weight: 700;
+    margin: 0.35em 0 0.2em;
+    line-height: 1.35;
+}
+
+[data-memo-id] h2 {
+    font-size: 1.2em;
+    font-weight: 600;
+    margin: 0.35em 0 0.2em;
+    line-height: 1.35;
+}
+
+[data-memo-id] h3 {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin: 0.3em 0 0.15em;
+    line-height: 1.4;
+}
+
+[data-memo-id] h4 {
+    font-size: 1.05em;
+    font-weight: 600;
+    margin: 0.25em 0 0.1em;
+    line-height: 1.4;
+}
+
+[data-memo-id] h5 {
+    font-size: 1em;
+    font-weight: 600;
+    margin: 0.2em 0 0.1em;
+    line-height: 1.4;
+}
+
+[data-memo-id] h6 {
+    font-size: 0.95em;
+    font-weight: 600;
+    margin: 0.2em 0 0.1em;
+    line-height: 1.4;
+    opacity: 0.85;
+}
+
+/* リンク - クリック可能にする */
+[data-memo-id] a {
+    color: #2563eb;
+    text-decoration: underline;
+    pointer-events: auto !important;
+    cursor: pointer;
+}
+
+[data-memo-id] a:hover {
+    color: #1d4ed8;
+}
+
+/* リスト */
+[data-memo-id] ul,
+[data-memo-id] ol {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+}
+
+[data-memo-id] li {
+    margin: 0.2em 0;
+}
+
+/* コードブロック */
+[data-memo-id] pre {
+    background: rgba(0, 0, 0, 0.08);
+    padding: 0.8em;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 0.5em 0;
+}
+
+[data-memo-id] code {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+[data-memo-id] :not(pre)>code {
+    background: rgba(0, 0, 0, 0.08);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+}
+
+/* 引用 */
+[data-memo-id] blockquote {
+    border-left: 3px solid rgba(0, 0, 0, 0.2);
+    margin: 0.5em 0;
+    padding-left: 1em;
+    opacity: 0.85;
+}
+
+/* 水平線 */
+[data-memo-id] hr {
+    border: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.15);
+    margin: 0.8em 0;
+}
+
+/* 段落 */
+[data-memo-id] p {
+    margin: 0.4em 0;
+}
+
+/* 太字・斜体 */
+[data-memo-id] strong {
+    font-weight: 700;
+}
+
+[data-memo-id] em {
+    font-style: italic;
+}
+
+/* 画像 */
+[data-memo-id] img {
+    max-width: 100%;
+    border-radius: 4px;
+}
+
+/* テーブル */
+[data-memo-id] table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.5em 0;
+}
+
+[data-memo-id] th,
+[data-memo-id] td {
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    padding: 0.4em 0.6em;
+    text-align: left;
+}
+
+[data-memo-id] th {
+    background: rgba(0, 0, 0, 0.05);
+    font-weight: 600;
+}

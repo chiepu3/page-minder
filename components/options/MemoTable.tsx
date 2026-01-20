@@ -8,15 +8,19 @@ import type { Memo } from '@/types';
 interface MemoTableProps {
     memos: Memo[];
     onDelete: (memoId: string) => void;
+    onUpdate: (memo: Memo) => void;
     onRefresh: () => void;
 }
 
 /**
  * 全メモを一覧表示するテーブルコンポーネント
  */
-export function MemoTable({ memos, onDelete, onRefresh }: MemoTableProps) {
+export function MemoTable({ memos, onDelete, onUpdate, onRefresh }: MemoTableProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+    const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
+    const [editTitle, setEditTitle] = useState('');
+    const [editContent, setEditContent] = useState('');
 
     // フィルタリング
     const filteredMemos = useMemo(() => {
@@ -49,8 +53,27 @@ export function MemoTable({ memos, onDelete, onRefresh }: MemoTableProps) {
             setDeleteConfirmId(null);
         } else {
             setDeleteConfirmId(memoId);
-            // 3秒後にリセット
             setTimeout(() => setDeleteConfirmId(null), 3000);
+        }
+    };
+
+    // 編集開始
+    const handleEditClick = (memo: Memo) => {
+        setEditingMemo(memo);
+        setEditTitle(memo.title || '');
+        setEditContent(memo.content);
+    };
+
+    // 編集保存
+    const handleSaveEdit = () => {
+        if (editingMemo) {
+            onUpdate({
+                ...editingMemo,
+                title: editTitle,
+                content: editContent,
+                updatedAt: new Date().toISOString(),
+            });
+            setEditingMemo(null);
         }
     };
 
@@ -118,6 +141,13 @@ export function MemoTable({ memos, onDelete, onRefresh }: MemoTableProps) {
                                 </td>
                                 <td className="memo-table-actions">
                                     <button
+                                        className="memo-table-button"
+                                        onClick={() => handleEditClick(memo)}
+                                        title="編集"
+                                    >
+                                        <span className="material-symbols-outlined">edit</span>
+                                    </button>
+                                    <button
                                         className={`memo-table-button danger ${
                                             deleteConfirmId === memo.id ? 'confirm' : ''
                                         }`}
@@ -137,6 +167,57 @@ export function MemoTable({ memos, onDelete, onRefresh }: MemoTableProps) {
                         ))}
                     </tbody>
                 </table>
+            )}
+
+            {/* 編集モーダル */}
+            {editingMemo && (
+                <div className="memo-edit-modal-overlay" onClick={() => setEditingMemo(null)}>
+                    <div className="memo-edit-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="memo-edit-modal-header">
+                            <h3>メモを編集</h3>
+                            <button
+                                className="memo-edit-modal-close"
+                                onClick={() => setEditingMemo(null)}
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div className="memo-edit-modal-body">
+                            <div className="memo-edit-field">
+                                <label>タイトル</label>
+                                <input
+                                    type="text"
+                                    value={editTitle}
+                                    onChange={(e) => setEditTitle(e.target.value)}
+                                    placeholder="タイトルを入力..."
+                                />
+                            </div>
+                            <div className="memo-edit-field">
+                                <label>内容（Markdown対応）</label>
+                                <textarea
+                                    value={editContent}
+                                    onChange={(e) => setEditContent(e.target.value)}
+                                    placeholder="内容を入力..."
+                                    rows={10}
+                                />
+                            </div>
+                        </div>
+                        <div className="memo-edit-modal-footer">
+                            <button
+                                className="memo-edit-button cancel"
+                                onClick={() => setEditingMemo(null)}
+                            >
+                                キャンセル
+                            </button>
+                            <button
+                                className="memo-edit-button save"
+                                onClick={handleSaveEdit}
+                            >
+                                保存
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
