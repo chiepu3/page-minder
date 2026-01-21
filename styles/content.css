@@ -120,6 +120,13 @@
    PageMinder - Markdown Styles
    ============================================================================= */
 
+/* ベーススタイル - テキストの折り返しを保証 */
+[data-memo-id] {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    overflow-x: hidden;
+}
+
 /* ヘッダー */
 [data-memo-id] h1 {
     font-size: 1.2em;
@@ -170,6 +177,8 @@
     text-decoration: underline;
     pointer-events: auto !important;
     cursor: pointer;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 [data-memo-id] a:hover {
@@ -192,13 +201,19 @@
     background: rgba(0, 0, 0, 0.08);
     padding: 0.8em;
     border-radius: 6px;
-    overflow-x: auto;
+    overflow-x: hidden;
     margin: 0.5em 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 [data-memo-id] code {
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
     font-size: 0.9em;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 [data-memo-id] :not(pre)>code {
@@ -225,6 +240,8 @@
 /* 段落 */
 [data-memo-id] p {
     margin: 0.4em 0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 /* 太字・斜体 */

@@ -68,6 +68,7 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
         fontFamily: 'inherit',
         fontSize: 'inherit',
         lineHeight: 1.5,
+        overflow: 'auto',
       }}
       placeholder="Markdownで入力..."
     />

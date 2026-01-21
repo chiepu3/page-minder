@@ -64,10 +64,10 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
     return renderer;
   }, []);
 
-  // Markdownをパース（リンクは新しいタブで開く）
+  // Markdownをパース（リンクは新しいタブで開く、単一改行を有効化）
   const parsedContent = useMemo(() => {
     if (!memo.content) return '';
-    return marked(memo.content, { renderer: customRenderer }) as string;
+    return marked(memo.content, { renderer: customRenderer, breaks: true }) as string;
   }, [memo.content, customRenderer]);
 
   // h1からタイトルを自動抽出（タイトルが未設定の場合）
@@ -425,7 +425,7 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
           onDoubleClick={!isEditing ? () => setIsEditing(true) : undefined}
         >
           {isEditing ? (
-            <div style={{ flex: 1, overflow: 'auto' }}>
+            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
               <MemoEditor
                 content={memo.content}
                 settings={settings}
@@ -437,7 +437,7 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
           ) : (
             <div
               data-memo-id={memo.id}
-              style={{ 
+              style={{
                 flex: 1,
                 fontSize: `${fontSize}px`,
                 overflow: 'auto',
@@ -452,6 +452,13 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
                   if (href) {
                     window.open(href, '_blank', 'noopener,noreferrer');
                   }
+                }
+              }}
+              onDoubleClick={(e) => {
+                // リンク以外をダブルクリックした場合は編集モードに入る
+                const target = e.target as HTMLElement;
+                if (target.tagName !== 'A' && !target.closest('a')) {
+                  setIsEditing(true);
                 }
               }}
             >
