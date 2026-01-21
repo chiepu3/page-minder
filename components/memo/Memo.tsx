@@ -64,10 +64,10 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
     return renderer;
   }, []);
 
-  // Markdownをパース（リンクは新しいタブで開く、単一改行を有効化）
+  // Markdownをパース（リンクは新しいタブで開く、単一改行を有効化、URL自動リンク化）
   const parsedContent = useMemo(() => {
     if (!memo.content) return '';
-    return marked(memo.content, { renderer: customRenderer, breaks: true }) as string;
+    return marked(memo.content, { renderer: customRenderer, breaks: true, gfm: true }) as string;
   }, [memo.content, customRenderer]);
 
   // h1からタイトルを自動抽出（タイトルが未設定の場合）
