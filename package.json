@@ -2,7 +2,7 @@
   "name": "page-minder",
   "description": "業務メモを画面上に表示するChrome拡張機能",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.7.1",
   "type": "module",
   "scripts": {
     "dev": "wxt",
