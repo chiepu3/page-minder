@@ -2,7 +2,7 @@
 // PageMinder - Activation Overlay Component (with Ruler)
 // =============================================================================
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import type { Memo, ActivationConfig } from '@/types';
 import { Memo as MemoComponent } from './Memo';
 import type { GlobalSettings } from '@/types';
@@ -39,11 +39,20 @@ interface RulerInfo {
     };
 }
 
+// ドラッグ中のキャッシュ用型
+interface DragCache {
+    elementRect: DOMRect;
+    overlayWidth: number;
+    overlayHeight: number;
+    scrollX: number;
+    scrollY: number;
+}
+
 /**
  * アクティブ化されたメモを表示するオーバーレイ
  * トリガー要素の近くまたは固定位置に表示
  */
-export function ActivationOverlay({
+function ActivationOverlayComponent({
     memo,
     triggerElement,
     settings,
@@ -61,12 +70,43 @@ export function ActivationOverlay({
     const dragStartRef = useRef({ mouseX: 0, mouseY: 0, offsetX: 0, offsetY: 0 });
     const config = memo.activation;
 
+    // パフォーマンス最適化: オーバーレイサイズをキャッシュ
+    const overlaySize = useRef({ width: 300, height: 200 });
+
+    // パフォーマンス最適化: ドラッグ中のキャッシュ
+    const dragCache = useRef<DragCache | null>(null);
+
+    // パフォーマンス最適化: ルーラーSVG要素への直接参照
+    const rulerSvgRef = useRef<SVGSVGElement>(null);
+    const horizontalLineRef = useRef<SVGLineElement>(null);
+    const horizontalTextRef = useRef<SVGTextElement>(null);
+    const verticalLineRef = useRef<SVGLineElement>(null);
+    const verticalTextRef = useRef<SVGTextElement>(null);
+
+    // パフォーマンス最適化: rAF IDの追跡
+    const rafIdRef = useRef<number | null>(null);
+
+    // ResizeObserverでオーバーレイサイズを監視
+    useEffect(() => {
+        if (!overlayRef.current) return;
+        const resizeObserver = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                overlaySize.current = {
+                    width: entry.contentRect.width,
+                    height: entry.contentRect.height,
+                };
+            }
+        });
+        resizeObserver.observe(overlayRef.current);
+        return () => resizeObserver.disconnect();
+    }, []);
+
     // トリガー要素の位置を取得
     const getElementRect = useCallback(() => {
         return triggerElement.getBoundingClientRect();
     }, [triggerElement]);
 
-    // 表示位置を計算
+    // 表示位置を計算（キャッシュされたサイズを使用）
     const calculatePosition = useCallback(() => {
         if (!config) return { x: 0, y: 0 };
 
@@ -74,15 +114,14 @@ export function ActivationOverlay({
             const rect = getElementRect();
             const offsetX = config.offsetX ?? 10;
             const offsetY = config.offsetY ?? 10;
-            
+
             // 要素の右下に配置（スクロール位置を加算）
             let x = rect.right + offsetX + window.scrollX;
             let y = rect.bottom + offsetY + window.scrollY;
 
-            // 画面外にはみ出る場合は調整
-            const overlayWidth = overlayRef.current?.offsetWidth ?? 300;
-            const overlayHeight = overlayRef.current?.offsetHeight ?? 200;
-            
+            // 画面外にはみ出る場合は調整（キャッシュされたサイズを使用）
+            const { width: overlayWidth, height: overlayHeight } = overlaySize.current;
+
             if (x + overlayWidth > window.innerWidth + window.scrollX) {
                 x = rect.left - overlayWidth - offsetX + window.scrollX;
             }
@@ -102,25 +141,27 @@ export function ActivationOverlay({
         }
     }, [config, getElementRect, memo]);
 
-    // ルーラー情報を計算
-    const calculateRuler = useCallback((memoX: number, memoY: number): RulerInfo => {
+    // ルーラー情報を計算（キャッシュ使用版、オプション引数でDOM計測回避）
+    const calculateRuler = useCallback((
+        memoX: number,
+        memoY: number,
+        cachedRect?: DOMRect,
+        cachedOverlayWidth?: number,
+        cachedOverlayHeight?: number
+    ): RulerInfo => {
         if (!config || config.positionMode !== 'near-element') {
             return { visible: false };
         }
 
-        const rect = getElementRect();
-        const overlayWidth = overlayRef.current?.offsetWidth ?? 300;
-        const overlayHeight = overlayRef.current?.offsetHeight ?? 200;
+        const rect = cachedRect ?? getElementRect();
+        const overlayWidth = cachedOverlayWidth ?? overlaySize.current.width;
+        const overlayHeight = cachedOverlayHeight ?? overlaySize.current.height;
 
         // メモの中心座標（スクロール補正前のビューポート座標）
         const memoViewX = memoX - window.scrollX;
         const memoViewY = memoY - window.scrollY;
         const memoCenterX = memoViewX + overlayWidth / 2;
         const memoCenterY = memoViewY + overlayHeight / 2;
-
-        // 要素の中心座標
-        const elemCenterX = rect.left + rect.width / 2;
-        const elemCenterY = rect.top + rect.height / 2;
 
         // メモが要素の右にあるか左にあるか
         const isRight = memoViewX >= rect.right;
@@ -180,38 +221,99 @@ export function ActivationOverlay({
         };
     }, [config, getElementRect]);
 
+    // パフォーマンス最適化: ルーラーSVGを直接更新（React再レンダリング回避）
+    const updateRulerDirectly = useCallback((rulerInfo: RulerInfo) => {
+        if (!rulerInfo.visible) return;
+
+        // 水平ルーラーの更新
+        if (horizontalLineRef.current && horizontalTextRef.current) {
+            if (rulerInfo.horizontalLine) {
+                const h = rulerInfo.horizontalLine;
+                horizontalLineRef.current.setAttribute('x1', String(h.x1));
+                horizontalLineRef.current.setAttribute('y1', String(h.y1));
+                horizontalLineRef.current.setAttribute('x2', String(h.x2));
+                horizontalLineRef.current.setAttribute('y2', String(h.y2));
+                horizontalLineRef.current.style.display = '';
+                horizontalTextRef.current.setAttribute('x', String((h.x1 + h.x2) / 2));
+                horizontalTextRef.current.setAttribute('y', String(h.y1 - 8));
+                horizontalTextRef.current.textContent = `${h.distance}px`;
+                horizontalTextRef.current.style.display = '';
+            } else {
+                horizontalLineRef.current.style.display = 'none';
+                horizontalTextRef.current.style.display = 'none';
+            }
+        }
+
+        // 垂直ルーラーの更新
+        if (verticalLineRef.current && verticalTextRef.current) {
+            if (rulerInfo.verticalLine) {
+                const v = rulerInfo.verticalLine;
+                verticalLineRef.current.setAttribute('x1', String(v.x1));
+                verticalLineRef.current.setAttribute('y1', String(v.y1));
+                verticalLineRef.current.setAttribute('x2', String(v.x2));
+                verticalLineRef.current.setAttribute('y2', String(v.y2));
+                verticalLineRef.current.style.display = '';
+                verticalTextRef.current.setAttribute('x', String(v.x1 + 8));
+                verticalTextRef.current.setAttribute('y', String((v.y1 + v.y2) / 2));
+                verticalTextRef.current.textContent = `${v.distance}px`;
+                verticalTextRef.current.style.display = '';
+            } else {
+                verticalLineRef.current.style.display = 'none';
+                verticalTextRef.current.style.display = 'none';
+            }
+        }
+    }, []);
+
     // 初期位置を設定
     useEffect(() => {
         const pos = calculatePosition();
         setPosition(pos);
     }, [calculatePosition]);
 
-    // スクロールやリサイズ時に再計算（ドラッグ中以外）
+    // スクロールやリサイズ時に再計算（ドラッグ中以外）- rAFでスロットリング
     useEffect(() => {
         if (isDragging) return;
 
+        let rafId: number | null = null;
+        let pending = false;
+
         const handleUpdate = () => {
-            const pos = calculatePosition();
-            setPosition(pos);
+            if (pending) return;
+            pending = true;
+            rafId = requestAnimationFrame(() => {
+                const pos = calculatePosition();
+                setPosition(pos);
+                pending = false;
+            });
         };
 
-        window.addEventListener('scroll', handleUpdate);
+        window.addEventListener('scroll', handleUpdate, { passive: true });
         window.addEventListener('resize', handleUpdate);
 
         return () => {
             window.removeEventListener('scroll', handleUpdate);
             window.removeEventListener('resize', handleUpdate);
+            if (rafId !== null) cancelAnimationFrame(rafId);
         };
     }, [isDragging, calculatePosition]);
 
     // ドラッグ開始
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         if (config?.positionMode !== 'near-element') return;
-        
+
         e.preventDefault();
         setIsDragging(true);
         onPauseActivation('drag');
-        
+
+        // パフォーマンス最適化: ドラッグ開始時に要素位置をキャッシュ
+        dragCache.current = {
+            elementRect: triggerElement.getBoundingClientRect(),
+            overlayWidth: overlaySize.current.width,
+            overlayHeight: overlaySize.current.height,
+            scrollX: window.scrollX,
+            scrollY: window.scrollY,
+        };
+
         dragStartRef.current = {
             mouseX: e.clientX,
             mouseY: e.clientY,
@@ -221,51 +323,94 @@ export function ActivationOverlay({
 
         // 初期ルーラー表示
         setRuler(calculateRuler(position.x, position.y));
-    }, [config, onPauseActivation, position, calculateRuler]);
+    }, [config, onPauseActivation, position, calculateRuler, triggerElement]);
 
-    // ドラッグ中
+    // ドラッグ中 - キャッシュ使用 + rAF + 直接DOM更新で最適化
     useEffect(() => {
         if (!isDragging || !config) return;
 
+        // 現在の位置を追跡（mouseupで使用）
+        let currentX = position.x;
+        let currentY = position.y;
+
         const handleMouseMove = (e: MouseEvent) => {
-            const deltaX = e.clientX - dragStartRef.current.mouseX;
-            const deltaY = e.clientY - dragStartRef.current.mouseY;
-
-            const newOffsetX = dragStartRef.current.offsetX + deltaX;
-            const newOffsetY = dragStartRef.current.offsetY + deltaY;
-
-            // 新しい位置を計算
-            const rect = getElementRect();
-            let newX = rect.right + newOffsetX + window.scrollX;
-            let newY = rect.bottom + newOffsetY + window.scrollY;
-
-            // 画面外調整
-            const overlayWidth = overlayRef.current?.offsetWidth ?? 300;
-            const overlayHeight = overlayRef.current?.offsetHeight ?? 200;
-
-            if (newX + overlayWidth > window.innerWidth + window.scrollX) {
-                newX = rect.left - overlayWidth - Math.abs(newOffsetX) + window.scrollX;
-            }
-            if (newY + overlayHeight > window.innerHeight + window.scrollY) {
-                newY = rect.top - overlayHeight - Math.abs(newOffsetY) + window.scrollY;
+            // 既存のrAFをキャンセル
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current);
             }
 
-            newX = Math.max(0, newX);
-            newY = Math.max(0, newY);
+            rafIdRef.current = requestAnimationFrame(() => {
+                const cache = dragCache.current;
+                if (!cache) return;
 
-            setPosition({ x: newX, y: newY });
-            setRuler(calculateRuler(newX, newY));
+                const deltaX = e.clientX - dragStartRef.current.mouseX;
+                const deltaY = e.clientY - dragStartRef.current.mouseY;
+
+                const newOffsetX = dragStartRef.current.offsetX + deltaX;
+                const newOffsetY = dragStartRef.current.offsetY + deltaY;
+
+                // キャッシュされた要素位置を使用（DOM計測回避）
+                // ただしスクロール量は現在の値を使用
+                const scrollDeltaX = window.scrollX - cache.scrollX;
+                const scrollDeltaY = window.scrollY - cache.scrollY;
+                const rect = {
+                    right: cache.elementRect.right + scrollDeltaX,
+                    left: cache.elementRect.left + scrollDeltaX,
+                    bottom: cache.elementRect.bottom + scrollDeltaY,
+                    top: cache.elementRect.top + scrollDeltaY,
+                };
+
+                let newX = rect.right + newOffsetX + window.scrollX;
+                let newY = rect.bottom + newOffsetY + window.scrollY;
+
+                // 画面外調整（キャッシュされたサイズを使用）
+                const { overlayWidth, overlayHeight } = cache;
+
+                if (newX + overlayWidth > window.innerWidth + window.scrollX) {
+                    newX = rect.left - overlayWidth - Math.abs(newOffsetX) + window.scrollX;
+                }
+                if (newY + overlayHeight > window.innerHeight + window.scrollY) {
+                    newY = rect.top - overlayHeight - Math.abs(newOffsetY) + window.scrollY;
+                }
+
+                newX = Math.max(0, newX);
+                newY = Math.max(0, newY);
+
+                currentX = newX;
+                currentY = newY;
+
+                setPosition({ x: newX, y: newY });
+
+                // ルーラーを直接更新（React再レンダリング回避）
+                const rulerInfo = calculateRuler(
+                    newX,
+                    newY,
+                    cache.elementRect,
+                    cache.overlayWidth,
+                    cache.overlayHeight
+                );
+                updateRulerDirectly(rulerInfo);
+            });
         };
 
         const handleMouseUp = () => {
+            // rAFをキャンセル
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current);
+                rafIdRef.current = null;
+            }
+
             setIsDragging(false);
             setRuler({ visible: false });
             onResumeActivation('drag');
 
-            // オフセットを保存
-            const rect = getElementRect();
-            const currentOffsetX = position.x - window.scrollX - rect.right;
-            const currentOffsetY = position.y - window.scrollY - rect.bottom;
+            // キャッシュをクリア
+            dragCache.current = null;
+
+            // オフセットを保存（最新の要素位置を取得）
+            const rect = triggerElement.getBoundingClientRect();
+            const currentOffsetX = currentX - window.scrollX - rect.right;
+            const currentOffsetY = currentY - window.scrollY - rect.bottom;
 
             if (memo.activation) {
                 const updatedMemo: Memo = {
@@ -286,23 +431,25 @@ export function ActivationOverlay({
         return () => {
             document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('mouseup', handleMouseUp);
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current);
+            }
         };
-    }, [isDragging, config, getElementRect, position, memo, onUpdate, onResumeActivation, calculateRuler]);
+    }, [isDragging, config, position, memo, onUpdate, onResumeActivation, calculateRuler, updateRulerDirectly, triggerElement]);
 
-    // 要素ハイライト
+    // 要素ハイライト - CSSカスタムプロパティとクラスを使用（レイアウト再計算回避）
     useEffect(() => {
         if (!config?.highlightElement) return;
 
+        const element = triggerElement as HTMLElement;
         const highlightColor = config.highlightColor ?? 'rgba(255, 193, 7, 0.3)';
-        const originalOutline = (triggerElement as HTMLElement).style.outline;
-        const originalBoxShadow = (triggerElement as HTMLElement).style.boxShadow;
 
-        (triggerElement as HTMLElement).style.outline = `3px solid ${highlightColor}`;
-        (triggerElement as HTMLElement).style.boxShadow = `0 0 10px ${highlightColor}`;
+        element.style.setProperty('--pageminder-highlight-color', highlightColor);
+        element.classList.add('pageminder-highlight');
 
         return () => {
-            (triggerElement as HTMLElement).style.outline = originalOutline;
-            (triggerElement as HTMLElement).style.boxShadow = originalBoxShadow;
+            element.classList.remove('pageminder-highlight');
+            element.style.removeProperty('--pageminder-highlight-color');
         };
     }, [config, triggerElement]);
 
@@ -312,72 +459,79 @@ export function ActivationOverlay({
 
     return (
         <>
-            {/* ルーラー表示 */}
-            {ruler.visible && (
-                <svg
+            {/* ルーラー表示 - 常にレンダリングしておき、表示/非表示はstyleで制御 */}
+            <svg
+                ref={rulerSvgRef}
+                style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100vw',
+                    height: '100vh',
+                    pointerEvents: 'none',
+                    zIndex: 2147483646,
+                    display: ruler.visible ? 'block' : 'none',
+                }}
+            >
+                {/* 水平ルーラー */}
+                <line
+                    ref={horizontalLineRef}
+                    x1={ruler.horizontalLine?.x1 ?? 0}
+                    y1={ruler.horizontalLine?.y1 ?? 0}
+                    x2={ruler.horizontalLine?.x2 ?? 0}
+                    y2={ruler.horizontalLine?.y2 ?? 0}
+                    stroke="#FF5722"
+                    strokeWidth="2"
+                    strokeDasharray="5,5"
+                    style={{ display: ruler.horizontalLine ? '' : 'none' }}
+                />
+                <text
+                    ref={horizontalTextRef}
+                    x={ruler.horizontalLine ? (ruler.horizontalLine.x1 + ruler.horizontalLine.x2) / 2 : 0}
+                    y={ruler.horizontalLine ? ruler.horizontalLine.y1 - 8 : 0}
+                    fill="#FF5722"
+                    fontSize="12"
+                    fontWeight="bold"
+                    textAnchor="middle"
                     style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        width: '100vw',
-                        height: '100vh',
-                        pointerEvents: 'none',
-                        zIndex: 2147483646,
+                        textShadow: '0 0 3px white, 0 0 3px white',
+                        display: ruler.horizontalLine ? '' : 'none',
                     }}
                 >
-                    {/* 水平ルーラー */}
-                    {ruler.horizontalLine && (
-                        <>
-                            <line
-                                x1={ruler.horizontalLine.x1}
-                                y1={ruler.horizontalLine.y1}
-                                x2={ruler.horizontalLine.x2}
-                                y2={ruler.horizontalLine.y2}
-                                stroke="#FF5722"
-                                strokeWidth="2"
-                                strokeDasharray="5,5"
-                            />
-                            <text
-                                x={(ruler.horizontalLine.x1 + ruler.horizontalLine.x2) / 2}
-                                y={ruler.horizontalLine.y1 - 8}
-                                fill="#FF5722"
-                                fontSize="12"
-                                fontWeight="bold"
-                                textAnchor="middle"
-                                style={{ textShadow: '0 0 3px white, 0 0 3px white' }}
-                            >
-                                {ruler.horizontalLine.distance}px
-                            </text>
-                        </>
-                    )}
-                    {/* 垂直ルーラー */}
-                    {ruler.verticalLine && (
-                        <>
-                            <line
-                                x1={ruler.verticalLine.x1}
-                                y1={ruler.verticalLine.y1}
-                                x2={ruler.verticalLine.x2}
-                                y2={ruler.verticalLine.y2}
-                                stroke="#2196F3"
-                                strokeWidth="2"
-                                strokeDasharray="5,5"
-                            />
-                            <text
-                                x={ruler.verticalLine.x1 + 8}
-                                y={(ruler.verticalLine.y1 + ruler.verticalLine.y2) / 2}
-                                fill="#2196F3"
-                                fontSize="12"
-                                fontWeight="bold"
-                                style={{ textShadow: '0 0 3px white, 0 0 3px white' }}
-                            >
-                                {ruler.verticalLine.distance}px
-                            </text>
-                        </>
-                    )}
-                </svg>
-            )}
+                    {ruler.horizontalLine?.distance ?? 0}px
+                </text>
+                {/* 垂直ルーラー */}
+                <line
+                    ref={verticalLineRef}
+                    x1={ruler.verticalLine?.x1 ?? 0}
+                    y1={ruler.verticalLine?.y1 ?? 0}
+                    x2={ruler.verticalLine?.x2 ?? 0}
+                    y2={ruler.verticalLine?.y2 ?? 0}
+                    stroke="#2196F3"
+                    strokeWidth="2"
+                    strokeDasharray="5,5"
+                    style={{ display: ruler.verticalLine ? '' : 'none' }}
+                />
+                <text
+                    ref={verticalTextRef}
+                    x={ruler.verticalLine ? ruler.verticalLine.x1 + 8 : 0}
+                    y={ruler.verticalLine ? (ruler.verticalLine.y1 + ruler.verticalLine.y2) / 2 : 0}
+                    fill="#2196F3"
+                    fontSize="12"
+                    fontWeight="bold"
+                    style={{
+                        textShadow: '0 0 3px white, 0 0 3px white',
+                        display: ruler.verticalLine ? '' : 'none',
+                    }}
+                >
+                    {ruler.verticalLine?.distance ?? 0}px
+                </text>
+            </svg>
 
-            {/* メモオーバーレイ */}
+            {/* メモオーバーレイ
+                注意: transformを使うとcontaining blockが作成され、
+                子孫のposition:fixedが正常に機能しなくなる（モーダルが壊れる）
+                そのため、left/topを直接指定する */}
             <div
                 ref={overlayRef}
                 data-memo-id={memo.id}
@@ -414,3 +568,17 @@ export function ActivationOverlay({
         </>
     );
 }
+
+// React.memoでラップして不要な再レンダリングを防止
+// 注意: updatedAtは編集時に変更されるため比較対象から除外
+// 代わりにコンテンツとアクティベーション設定を比較
+export const ActivationOverlay = memo(ActivationOverlayComponent, (prevProps, nextProps) => {
+    return (
+        prevProps.memo.id === nextProps.memo.id &&
+        prevProps.memo.content === nextProps.memo.content &&
+        prevProps.memo.activation?.offsetX === nextProps.memo.activation?.offsetX &&
+        prevProps.memo.activation?.offsetY === nextProps.memo.activation?.offsetY &&
+        prevProps.triggerElement === nextProps.triggerElement &&
+        prevProps.settings === nextProps.settings
+    );
+});

@@ -22,17 +22,29 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
   const [value, setValue] = useState(content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 初期フォーカス＆カーソルを末尾に
+  // textareaの高さを内容に応じて自動調整
+  const adjustHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    // 一度高さをリセットしてからscrollHeightを取得
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, []);
+
+  // 初期フォーカス＆カーソルを末尾に＆高さ調整
   useEffect(() => {
     textareaRef.current?.focus();
     textareaRef.current?.setSelectionRange(value.length, value.length);
+    adjustHeight();
   }, []);
 
-  // 値変更時に親に通知
+  // 値変更時に親に通知＆高さ調整
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     setValue(newValue);
     onChange?.(newValue);
+    adjustHeight();
   };
 
   // Escapeキーでキャンセル、Ctrl+Enterで保存
@@ -58,11 +70,12 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
       onChange={handleChange}
       style={{
         width: '100%',
-        height: '100%',
+        minHeight: '100%',  // 最低でも親要素の高さを確保
         padding: '0',
         border: 'none',
         resize: 'none',
         outline: 'none',
+        overflow: 'hidden',  // スクロールバーを非表示（親でスクロール）
         backgroundColor: 'transparent',
         color: 'inherit',
         fontFamily: 'inherit',

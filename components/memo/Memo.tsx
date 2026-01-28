@@ -64,10 +64,14 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
     return renderer;
   }, []);
 
-  // Markdownをパース（リンクは新しいタブで開く）
+  // Markdownをパース（GFM + 単一改行をbrに変換）
   const parsedContent = useMemo(() => {
     if (!memo.content) return '';
-    return marked(memo.content, { renderer: customRenderer }) as string;
+    return marked(memo.content, {
+      renderer: customRenderer,
+      gfm: true,      // GitHub Flavored Markdown
+      breaks: true,   // 単一改行を<br>に変換
+    }) as string;
   }, [memo.content, customRenderer]);
 
   // h1からタイトルを自動抽出（タイトルが未設定の場合）
@@ -97,6 +101,16 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
       onResumeActivation?.('settings');
     }
   }, [isSettingsOpen, onPauseActivation, onResumeActivation]);
+
+  // アクティブ化の一時停止制御（編集中）
+  // IME入力中などにメモが消えないようにする
+  useEffect(() => {
+    if (isEditing) {
+      onPauseActivation?.('editing');
+    } else {
+      onResumeActivation?.('editing');
+    }
+  }, [isEditing, onPauseActivation, onResumeActivation]);
 
   // テーマ取得
   const theme = THEMES[settings.theme === 'system' ? 'dark' : settings.theme];
@@ -418,14 +432,17 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             flexDirection: 'column',
           }}
           onMouseDown={(e) => {
+            // 編集中は親（ActivationOverlay）への伝播を止めて、textarea操作を可能にする
+            if (isEditing) {
+              e.stopPropagation();
+              return;
+            }
             // リンクをクリックした場合はドラッグを開始しない
             const target = e.target as HTMLElement;
             if (target.tagName === 'A' || target.closest('a')) {
               return; // リンククリック時はドラッグ処理をスキップ
             }
-            if (!isEditing) {
-              handleDragStart(e);
-            }
+            handleDragStart(e);
           }}
           onDoubleClick={!isEditing ? () => setIsEditing(true) : undefined}
         >

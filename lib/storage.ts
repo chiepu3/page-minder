@@ -14,6 +14,11 @@ import { logger } from './logger';
  * chrome.storage.local のラッパークラス
  */
 class Storage {
+    // パフォーマンス最適化: 保留中の書き込みをバッファリング
+    private pendingWrites = new Map<string, Memo>();
+    private writeTimeout: ReturnType<typeof setTimeout> | null = null;
+    private readonly WRITE_DEBOUNCE_MS = 500;
+
     /**
      * 指定キーの値を取得
      */
@@ -67,8 +72,77 @@ class Storage {
 
     /**
      * メモを保存（作成または更新）
+     * @param memo - 保存するメモ
+     * @param options - 保存オプション
+     * @param options.immediate - trueの場合、デバウンスせず即座に保存（デフォルト: false）
+     *
+     * 即時保存は以下の場合に使用:
+     * - 内容（content）の変更
+     * - 重要な設定の変更
+     *
+     * デバウンス保存は以下の場合に使用:
+     * - 位置（position）の変更（ドラッグ中など頻繁に発生）
+     * - オフセットの変更
      */
-    async saveMemo(memo: Memo): Promise<void> {
+    async saveMemo(memo: Memo, options?: { immediate?: boolean }): Promise<void> {
+        if (options?.immediate) {
+            // 保留中の同じメモの書き込みをキャンセル
+            this.pendingWrites.delete(memo.id);
+            await this.saveMemoInternal(memo);
+            return;
+        }
+
+        // デバウンス処理: 保留リストに追加
+        this.pendingWrites.set(memo.id, memo);
+
+        // デバウンスタイマーをセット
+        if (!this.writeTimeout) {
+            this.writeTimeout = setTimeout(() => this.flushWrites(), this.WRITE_DEBOUNCE_MS);
+        }
+    }
+
+    /**
+     * 即座にメモを保存（デバウンスなし）- 削除前など確実に保存が必要な場合
+     * @deprecated saveMemo(memo, { immediate: true }) を使用してください
+     */
+    async saveMemoImmediate(memo: Memo): Promise<void> {
+        await this.saveMemo(memo, { immediate: true });
+    }
+
+    /**
+     * 保留中の書き込みをフラッシュ
+     */
+    private async flushWrites(): Promise<void> {
+        this.writeTimeout = null;
+
+        if (this.pendingWrites.size === 0) return;
+
+        // 保留中の全メモを取得してクリア
+        const memosToWrite = Array.from(this.pendingWrites.values());
+        this.pendingWrites.clear();
+
+        // 現在のメモ一覧を取得
+        const existingMemos = await this.getMemos();
+        const memoMap = new Map(existingMemos.map(m => [m.id, m]));
+        const now = new Date().toISOString();
+
+        // バッチ更新
+        for (const memo of memosToWrite) {
+            if (memoMap.has(memo.id)) {
+                memoMap.set(memo.id, { ...memo, updatedAt: now });
+            } else {
+                memoMap.set(memo.id, { ...memo, createdAt: now, updatedAt: now });
+            }
+        }
+
+        await this.set('memos', Array.from(memoMap.values()));
+        logger.info('Memos batch saved', { count: memosToWrite.length });
+    }
+
+    /**
+     * 内部用: 単一メモを即座に保存
+     */
+    private async saveMemoInternal(memo: Memo): Promise<void> {
         const memos = await this.getMemos();
         const index = memos.findIndex((m) => m.id === memo.id);
         const now = new Date().toISOString();

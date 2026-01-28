@@ -2,7 +2,7 @@
 // PageMinder - useActivation Hook (with MutationObserver for dynamic DOM)
 // =============================================================================
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Memo, ActivationConfig, GlobalSettings } from '@/types';
 import { logger } from '@/lib/logger';
 
@@ -35,6 +35,9 @@ export function useActivation(
     const rescanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // 既にイベントリスナーを設定した要素を追跡（重複登録防止）
     const registeredElementsRef = useRef<WeakSet<Element>>(new WeakSet());
+
+    // パフォーマンス最適化: セレクタ→メモのマッピングをキャッシュ
+    const selectorMemoMapRef = useRef<Map<string, Memo[]> | null>(null);
 
     // メモ外クリックで非表示
     useEffect(() => {
@@ -288,30 +291,95 @@ export function useActivation(
         }
     }, []);
 
+    // パフォーマンス最適化: セレクタでグルーピングしたマップを構築
+    const buildSelectorMemoMap = useCallback((activatableMemos: Memo[]): Map<string, Memo[]> => {
+        const map = new Map<string, Memo[]>();
+        for (const memo of activatableMemos) {
+            const selector = memo.activation!.selector;
+            if (!map.has(selector)) map.set(selector, []);
+            map.get(selector)!.push(memo);
+        }
+        return map;
+    }, []);
+
     // 全てのアクティブ化可能なメモに対してセレクタをスキャンしてリスナーを設定
     const scanAndSetupListeners = useCallback((activatableMemos: Memo[]) => {
         let newElementsFound = 0;
 
-        for (const memo of activatableMemos) {
-            const config = memo.activation!;
+        // セレクタでグルーピングして同一セレクタは1回だけクエリ
+        const selectorMemoMap = buildSelectorMemoMap(activatableMemos);
+        selectorMemoMapRef.current = selectorMemoMap;
 
+        for (const [selector, memos] of selectorMemoMap) {
             try {
-                const elements = document.querySelectorAll(config.selector);
+                const elements = document.querySelectorAll(selector);
 
                 elements.forEach(element => {
-                    const elementKey = `${memo.id}:${config.selector}`;
-                    if ((element as any).__pageminder_registered !== elementKey) {
-                        newElementsFound++;
-                        setupListenersForElement(memo, element, config);
+                    for (const memo of memos) {
+                        const config = memo.activation!;
+                        const elementKey = `${memo.id}:${selector}`;
+                        if ((element as any).__pageminder_registered !== elementKey) {
+                            newElementsFound++;
+                            setupListenersForElement(memo, element, config);
+                        }
                     }
                 });
             } catch (error) {
-                logger.warn('Invalid selector', { selector: config.selector, error: String(error) });
+                logger.warn('Invalid selector', { selector, error: String(error) });
             }
         }
 
         if (newElementsFound > 0) {
             logger.info('Activation: New elements found and registered', { count: newElementsFound });
+        }
+    }, [setupListenersForElement, buildSelectorMemoMap]);
+
+    // パフォーマンス最適化: 追加されたノードのみをチェック
+    const checkNodesForSelectors = useCallback((nodes: Element[]) => {
+        const selectorMemoMap = selectorMemoMapRef.current;
+        if (!selectorMemoMap || selectorMemoMap.size === 0) return;
+
+        let newElementsFound = 0;
+
+        for (const [selector, memos] of selectorMemoMap) {
+            for (const node of nodes) {
+                // ノード自体がセレクタにマッチするか
+                try {
+                    if (node.matches?.(selector)) {
+                        for (const memo of memos) {
+                            const config = memo.activation!;
+                            const elementKey = `${memo.id}:${selector}`;
+                            if ((node as any).__pageminder_registered !== elementKey) {
+                                newElementsFound++;
+                                setupListenersForElement(memo, node, config);
+                            }
+                        }
+                    }
+                } catch {
+                    // 無効なセレクタは無視
+                }
+
+                // ノードの子孫でセレクタにマッチするものを検索
+                try {
+                    const descendants = node.querySelectorAll?.(selector);
+                    descendants?.forEach(el => {
+                        for (const memo of memos) {
+                            const config = memo.activation!;
+                            const elementKey = `${memo.id}:${selector}`;
+                            if ((el as any).__pageminder_registered !== elementKey) {
+                                newElementsFound++;
+                                setupListenersForElement(memo, el, config);
+                            }
+                        }
+                    });
+                } catch {
+                    // 無効なセレクタは無視
+                }
+            }
+        }
+
+        if (newElementsFound > 0) {
+            logger.debug('Activation: New elements found in added nodes', { count: newElementsFound });
         }
     }, [setupListenersForElement]);
 
@@ -360,29 +428,35 @@ export function useActivation(
             retryTimeouts.push(timeoutId);
         });
 
-        // 5. MutationObserverで動的DOM変更を監視
-        const debounceRescan = () => {
+        // 5. MutationObserverで動的DOM変更を監視（ターゲット型スキャン）
+        // 追加されたノードをバッファリングしてデバウンス
+        let pendingNodes: Element[] = [];
+
+        const debouncedCheckNodes = () => {
             if (rescanTimeoutRef.current) {
                 clearTimeout(rescanTimeoutRef.current);
             }
-            // 100msのデバウンスで再スキャン
+            // 100msのデバウンスで追加ノードをチェック
             rescanTimeoutRef.current = setTimeout(() => {
-                scanAndSetupListeners(activatableMemos);
+                if (pendingNodes.length > 0) {
+                    checkNodesForSelectors(pendingNodes);
+                    pendingNodes = [];
+                }
             }, 100);
         };
 
         observerRef.current = new MutationObserver((mutations) => {
-            // 追加されたノードがあるか確認
-            let hasAddedNodes = false;
+            // 追加されたノードを収集（ターゲット型スキャン）
             for (const mutation of mutations) {
-                if (mutation.addedNodes.length > 0) {
-                    hasAddedNodes = true;
-                    break;
-                }
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        pendingNodes.push(node as Element);
+                    }
+                });
             }
 
-            if (hasAddedNodes) {
-                debounceRescan();
+            if (pendingNodes.length > 0) {
+                debouncedCheckNodes();
             }
         });
 
@@ -403,6 +477,9 @@ export function useActivation(
             // 遅延リトライのタイムアウトをクリア
             retryTimeouts.forEach(id => clearTimeout(id));
 
+            // バッファをクリア
+            pendingNodes = [];
+
             if (observerRef.current) {
                 observerRef.current.disconnect();
                 observerRef.current = null;
@@ -411,8 +488,11 @@ export function useActivation(
                 clearTimeout(rescanTimeoutRef.current);
                 rescanTimeoutRef.current = null;
             }
+
+            // セレクタマップをクリア
+            selectorMemoMapRef.current = null;
         };
-    }, [memos, scanAndSetupListeners]);
+    }, [memos, scanAndSetupListeners, checkNodesForSelectors]);
 
     return {
         deactivateMemo: deactivateMemoInternal,

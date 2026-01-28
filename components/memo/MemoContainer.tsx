@@ -179,12 +179,18 @@ export function MemoContainer() {
 
 
 
-  const handleMemoUpdate = useCallback(async (updatedMemo: MemoType) => {
-    await storage.saveMemo(updatedMemo);
+  const handleMemoUpdate = useCallback(async (updatedMemo: MemoType, prevMemo?: MemoType) => {
+    // 前のメモ状態が渡されていない場合は、現在のメモ一覧から取得
+    const existingMemo = prevMemo ?? memos.find(m => m.id === updatedMemo.id);
+
+    // 内容が変更された場合は即時保存（編集完了時に確実に保存されるようにする）
+    const isContentChange = existingMemo?.content !== updatedMemo.content;
+
+    await storage.saveMemo(updatedMemo, { immediate: isContentChange });
     setMemos((prev) =>
       prev.map((m) => (m.id === updatedMemo.id ? updatedMemo : m))
     );
-  }, []);
+  }, [memos]);
 
   const handleMemoDelete = useCallback(async (memoId: string) => {
     await storage.deleteMemo(memoId);

@@ -260,3 +260,13 @@
     background: rgba(0, 0, 0, 0.05);
     font-weight: 600;
 }
+
+/* =============================================================================
+   PageMinder - Element Highlight (Performance Optimized)
+   ============================================================================= */
+
+/* ハイライト用クラス - CSSカスタムプロパティを使用してレイアウト再計算を回避 */
+.pageminder-highlight {
+    outline: 3px solid var(--pageminder-highlight-color, rgba(255, 193, 7, 0.3)) !important;
+    box-shadow: 0 0 10px var(--pageminder-highlight-color, rgba(255, 193, 7, 0.3)) !important;
+}
