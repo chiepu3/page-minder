@@ -115,13 +115,16 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
   const dragStartPosRef = useRef({ x: 0, y: 0 });
   const hasDraggedRef = useRef(false);
 
-  // ドラッグ機能
+  // アクティブ化メモかどうか、および周辺モードかどうか
+  const isNearElementMode = isActivated && memo.activation?.positionMode === 'near-element';
+
+  // ドラッグ機能（アクティブ化の周辺モードでは無効化）
   const { position: dragPosition, handleMouseDown: originalHandleDragStart, isDragging } = useDraggable({
     initialPosition: { x: position.x, y: position.y },
     onPositionChange: (newPos) => {
       updatePosition({ x: newPos.x, y: newPos.y });
     },
-    disabled: isEditing,
+    disabled: isEditing || isNearElementMode,
   });
 
   // アクティブ化の一時停止制御（ドラッグ中）
@@ -348,9 +351,10 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
         className={getAnimationClass()}
         style={{
           ...baseStyle,
-          position: position.pinned ? 'absolute' : 'fixed',
-          left: `${dragPosition.x}px`,
-          top: `${dragPosition.y}px`,
+          // アクティブ化周辺モードでは相対位置（ActivationOverlayが位置管理）
+          position: isNearElementMode ? 'relative' : (position.pinned ? 'absolute' : 'fixed'),
+          left: isNearElementMode ? undefined : `${dragPosition.x}px`,
+          top: isNearElementMode ? undefined : `${dragPosition.y}px`,
           width: `${size.width}px`,
           height: `${size.height}px`,
           backgroundColor: memoBgColor,
@@ -375,10 +379,11 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             justifyContent: 'space-between',
             padding: '8px 12px',
             backgroundColor: 'rgba(0,0,0,0.08)',
-            cursor: 'move',
+            // 周辺モードではドラッグ不可なのでカーソル変更
+            cursor: isNearElementMode ? 'default' : 'move',
             userSelect: 'none',
           }}
-          onMouseDown={handleDragStart}
+          onMouseDown={isNearElementMode ? undefined : handleDragStart}
         >
           <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontSize: '12px' }}>
             {memo.title ?? 'メモ'}
@@ -470,10 +475,10 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
           )}
         </div>
 
-        {/* ツールバー（ドラッグ可能） */}
+        {/* ツールバー（ドラッグ可能：周辺モード以外） */}
         <div
-          style={{ cursor: 'move' }}
-          onMouseDown={handleDragStart}
+          style={{ cursor: isNearElementMode ? 'default' : 'move' }}
+          onMouseDown={isNearElementMode ? undefined : handleDragStart}
         >
           <MemoToolbar
             memo={memo}
@@ -484,6 +489,7 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             onColorChange={(color) => onUpdate({ ...memo, backgroundColor: color })}
             onFontSizeChange={(size) => onUpdate({ ...memo, fontSize: size })}
             onOpenSettings={() => setIsSettingsOpen(true)}
+            hidePinButton={isNearElementMode}
           />
         </div>
 
