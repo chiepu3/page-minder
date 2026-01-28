@@ -192,7 +192,11 @@ export function SettingsModal({ memo, settings, onUpdate, onClose, onStartElemen
   }
 
   return (
-    <div style={overlayStyle} onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div 
+      style={overlayStyle} 
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       <div style={modalStyle}>
         <div style={headerStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

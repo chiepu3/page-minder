@@ -289,6 +289,8 @@ export function MemoContainer() {
             triggerElement={triggerElement}
             settings={settings}
             onUpdate={handleMemoUpdate}
+            onDelete={handleMemoDelete}
+            onStartElementPicker={handleStartElementPicker}
             onPauseActivation={(reason) => pauseDeactivation(memo.id, reason)}
             onResumeActivation={(reason) => resumeDeactivation(memo.id, reason)}
             onClose={() => deactivateMemo(memoId)}

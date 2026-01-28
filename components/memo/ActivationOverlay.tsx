@@ -12,7 +12,9 @@ interface ActivationOverlayProps {
     triggerElement: Element;
     settings: GlobalSettings;
     onUpdate: (memo: Memo) => void;
-    onClose: () => void;
+    onDelete: (memoId: string) => void; // データの削除
+    onClose: () => void; // 非表示（アクティブ化解除）
+    onStartElementPicker: (memoId: string) => void;
     onPauseActivation: (reason: string) => void;
     onResumeActivation: (reason: string) => void;
 }
@@ -46,7 +48,9 @@ export function ActivationOverlay({
     triggerElement,
     settings,
     onUpdate,
+    onDelete,
     onClose,
+    onStartElementPicker,
     onPauseActivation,
     onResumeActivation,
 }: ActivationOverlayProps) {
@@ -397,7 +401,11 @@ export function ActivationOverlay({
                     memo={memo}
                     settings={settings}
                     onUpdate={onUpdate}
-                    onDelete={() => onClose()}
+                    onDelete={() => {
+                        onDelete(memo.id);
+                        onClose();
+                    }}
+                    onStartElementPicker={() => onStartElementPicker(memo.id)}
                     isActivated={true}
                     onPauseActivation={onPauseActivation}
                     onResumeActivation={onResumeActivation}

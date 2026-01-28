@@ -52,6 +52,7 @@ export function ConfirmDialog({
           onCancel();
         }
       }}
+      onMouseDown={(e) => e.stopPropagation()}
     >
       <div
         style={{
