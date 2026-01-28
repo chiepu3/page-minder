@@ -1,4 +1,5 @@
 import { defineConfig } from 'wxt';
+import pkg from './package.json';
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -6,7 +7,7 @@ export default defineConfig({
   manifest: {
     name: 'PageMinder',
     description: '業務メモを画面上に表示する拡張機能',
-    version: '0.1.0',
+    version: pkg.version,
     permissions: ['storage', 'activeTab', 'scripting', 'contextMenus', 'webNavigation'],
     optional_permissions: ['history'],
     host_permissions: ['<all_urls>'],

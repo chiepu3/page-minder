@@ -1,8 +1,8 @@
 // =============================================================================
-// PageMinder - useActivation Hook (Simplified)
+// PageMinder - useActivation Hook (with MutationObserver for dynamic DOM)
 // =============================================================================
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import type { Memo, ActivationConfig, GlobalSettings } from '@/types';
 import { logger } from '@/lib/logger';
 
@@ -15,6 +15,7 @@ interface UseActivationOptions {
 /**
  * アクティブ化トリガーを管理するカスタムフック
  * メモに設定されたセレクタとトリガーに基づいてイベントを監視
+ * MutationObserverでDOMの動的変更にも対応
  */
 export function useActivation(
     memos: Memo[],
@@ -28,6 +29,12 @@ export function useActivation(
     const clickedElementsRef = useRef<Set<Element>>(new Set());
     const cleanupFunctionsRef = useRef<Array<() => void>>([]);
     const graceTimeoutIdsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+    // MutationObserver用のref
+    const observerRef = useRef<MutationObserver | null>(null);
+    const rescanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // 既にイベントリスナーを設定した要素を追跡（重複登録防止）
+    const registeredElementsRef = useRef<WeakSet<Element>>(new WeakSet());
 
     // メモ外クリックで非表示
     useEffect(() => {
@@ -146,16 +153,144 @@ export function useActivation(
         }
     }
 
-    // メモの変更を監視してイベントリスナーを設定
-    useEffect(() => {
-        // 以前のリスナーをクリーンアップ
-        cleanupFunctionsRef.current.forEach(cleanup => cleanup());
-        cleanupFunctionsRef.current = [];
+    // 単一要素に対してイベントリスナーを設定する関数
+    const setupListenersForElement = useCallback((memo: Memo, element: Element, config: ActivationConfig) => {
+        // 既に登録済みならスキップ
+        const elementKey = `${memo.id}:${config.selector}`;
+        if ((element as any).__pageminder_registered === elementKey) {
+            return;
+        }
+        (element as any).__pageminder_registered = elementKey;
 
-        // アクティブ化が有効なメモをフィルタ
-        const activatableMemos = memos.filter(
-            memo => memo.activation?.enabled && memo.activation?.selector
-        );
+        logger.debug('Setting up listeners for element', {
+            memoId: memo.id,
+            selector: config.selector,
+            trigger: config.trigger
+        });
+
+        // hover トリガー
+        if (config.trigger === 'hover') {
+            let hoverTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+            const handleMouseEnter = () => {
+                // 猶予タイマーをクリア（元に戻ってきた場合）
+                const graceId = graceTimeoutIdsRef.current.get(memo.id);
+                if (graceId) {
+                    clearTimeout(graceId);
+                    graceTimeoutIdsRef.current.delete(memo.id);
+                }
+
+                const delay = optionsRef.current.settings.activationShowDelay ?? 500;
+                hoverTimeoutId = setTimeout(() => {
+                    activateMemoInternal(memo, element, config);
+                    // timeout条件の場合、ホバー中は一時停止
+                    if (config.hideCondition === 'timeout') {
+                        pauseDeactivation(memo.id, 'hover-on-element');
+                    }
+                }, delay);
+            };
+
+            const handleMouseLeave = () => {
+                if (hoverTimeoutId) {
+                    clearTimeout(hoverTimeoutId);
+                    hoverTimeoutId = null;
+                }
+
+                // 猶予時間後に非表示処理
+                const gracePeriod = optionsRef.current.settings.activationHideGracePeriod ?? 300;
+                const graceTimeoutId = setTimeout(() => {
+                    graceTimeoutIdsRef.current.delete(memo.id);
+                    if (config.hideCondition === 'trigger-end') {
+                        deactivateMemoInternal(memo.id);
+                    } else if (config.hideCondition === 'timeout') {
+                        // ホバー外れたら再開
+                        resumeDeactivation(memo.id, 'hover-on-element');
+                    }
+                }, gracePeriod);
+                graceTimeoutIdsRef.current.set(memo.id, graceTimeoutId);
+            };
+            element.addEventListener('mouseenter', handleMouseEnter);
+            element.addEventListener('mouseleave', handleMouseLeave);
+
+            cleanupFunctionsRef.current.push(() => {
+                element.removeEventListener('mouseenter', handleMouseEnter);
+                element.removeEventListener('mouseleave', handleMouseLeave);
+                if (hoverTimeoutId) clearTimeout(hoverTimeoutId);
+                delete (element as any).__pageminder_registered;
+            });
+        }
+
+        // click トリガー
+        if (config.trigger === 'click') {
+            // timeout条件用のホバー制御
+            const handleMouseEnter = () => {
+                if (config.hideCondition === 'timeout' && activeStatesRef.current.has(memo.id)) {
+                    pauseDeactivation(memo.id, 'hover-on-element');
+                }
+            };
+            const handleMouseLeave = () => {
+                if (config.hideCondition === 'timeout' && activeStatesRef.current.has(memo.id)) {
+                    resumeDeactivation(memo.id, 'hover-on-element');
+                }
+            };
+
+            const handleClick = (e: Event) => {
+                if (config.clickStopPropagation && !clickedElementsRef.current.has(element)) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    clickedElementsRef.current.add(element);
+                    setTimeout(() => clickedElementsRef.current.delete(element), 3000);
+                }
+
+                // 既にアクティブなら非表示（トグル動作）
+                // ただし、一時停止中（設定画面など）は無視して常に表示維持
+                if (activeStatesRef.current.has(memo.id)) {
+                    if (!pausedStatesRef.current.has(memo.id)) {
+                        deactivateMemoInternal(memo.id);
+                    }
+                } else {
+                    activateMemoInternal(memo, element, config);
+                }
+            };
+
+            element.addEventListener('click', handleClick, true);
+            element.addEventListener('mouseenter', handleMouseEnter);
+            element.addEventListener('mouseleave', handleMouseLeave);
+
+            cleanupFunctionsRef.current.push(() => {
+                element.removeEventListener('click', handleClick, true);
+                element.removeEventListener('mouseenter', handleMouseEnter);
+                element.removeEventListener('mouseleave', handleMouseLeave);
+                delete (element as any).__pageminder_registered;
+            });
+        }
+
+        // focus トリガー
+        if (config.trigger === 'focus') {
+            const handleFocusIn = () => {
+                activateMemoInternal(memo, element, config);
+            };
+
+            const handleFocusOut = () => {
+                if (config.hideCondition === 'trigger-end') {
+                    deactivateMemoInternal(memo.id);
+                }
+            };
+
+            element.addEventListener('focusin', handleFocusIn);
+            element.addEventListener('focusout', handleFocusOut);
+
+            cleanupFunctionsRef.current.push(() => {
+                element.removeEventListener('focusin', handleFocusIn);
+                element.removeEventListener('focusout', handleFocusOut);
+                delete (element as any).__pageminder_registered;
+            });
+        }
+    }, []);
+
+    // 全てのアクティブ化可能なメモに対してセレクタをスキャンしてリスナーを設定
+    const scanAndSetupListeners = useCallback((activatableMemos: Memo[]) => {
+        let newElementsFound = 0;
 
         for (const memo of activatableMemos) {
             const config = memo.activation!;
@@ -164,123 +299,10 @@ export function useActivation(
                 const elements = document.querySelectorAll(config.selector);
 
                 elements.forEach(element => {
-                    // hover トリガー
-                    if (config.trigger === 'hover') {
-                        let hoverTimeoutId: ReturnType<typeof setTimeout> | null = null;
-
-                        const handleMouseEnter = () => {
-                            // 猶予タイマーをクリア（元に戻ってきた場合）
-                            const graceId = graceTimeoutIdsRef.current.get(memo.id);
-                            if (graceId) {
-                                clearTimeout(graceId);
-                                graceTimeoutIdsRef.current.delete(memo.id);
-                            }
-
-                            const delay = optionsRef.current.settings.activationShowDelay ?? 500;
-                            hoverTimeoutId = setTimeout(() => {
-                                activateMemoInternal(memo, element, config);
-                                // timeout条件の場合、ホバー中は一時停止
-                                if (config.hideCondition === 'timeout') {
-                                    pauseDeactivation(memo.id, 'hover-on-element');
-                                }
-                            }, delay);
-                        };
-
-                        const handleMouseLeave = () => {
-                            if (hoverTimeoutId) {
-                                clearTimeout(hoverTimeoutId);
-                                hoverTimeoutId = null;
-                            }
-
-                            // 猶予時間後に非表示処理
-                            const gracePeriod = optionsRef.current.settings.activationHideGracePeriod ?? 300;
-                            const graceTimeoutId = setTimeout(() => {
-                                graceTimeoutIdsRef.current.delete(memo.id);
-                                if (config.hideCondition === 'trigger-end') {
-                                    deactivateMemoInternal(memo.id);
-                                } else if (config.hideCondition === 'timeout') {
-                                    // ホバー外れたら再開
-                                    resumeDeactivation(memo.id, 'hover-on-element');
-                                }
-                            }, gracePeriod);
-                            graceTimeoutIdsRef.current.set(memo.id, graceTimeoutId);
-                        };
-                        element.addEventListener('mouseenter', handleMouseEnter);
-                        element.addEventListener('mouseleave', handleMouseLeave);
-
-                        cleanupFunctionsRef.current.push(() => {
-                            element.removeEventListener('mouseenter', handleMouseEnter);
-                            element.removeEventListener('mouseleave', handleMouseLeave);
-                            if (hoverTimeoutId) clearTimeout(hoverTimeoutId);
-                        });
-                    }
-
-                    // click トリガー
-                    if (config.trigger === 'click') {
-                        // timeout条件用のホバー制御
-                        const handleMouseEnter = () => {
-                            if (config.hideCondition === 'timeout' && activeStatesRef.current.has(memo.id)) {
-                                pauseDeactivation(memo.id, 'hover-on-element');
-                            }
-                        };
-                        const handleMouseLeave = () => {
-                            if (config.hideCondition === 'timeout' && activeStatesRef.current.has(memo.id)) {
-                                resumeDeactivation(memo.id, 'hover-on-element');
-                            }
-                        };
-
-                        const handleClick = (e: Event) => {
-                            if (config.clickStopPropagation && !clickedElementsRef.current.has(element)) {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                clickedElementsRef.current.add(element);
-                                setTimeout(() => clickedElementsRef.current.delete(element), 3000);
-                            }
-
-                            // 既にアクティブなら非表示（トグル動作）
-                            // ただし、一時停止中（設定画面など）は無視して常に表示維持
-                            if (activeStatesRef.current.has(memo.id)) {
-                                if (!pausedStatesRef.current.has(memo.id)) {
-                                    deactivateMemoInternal(memo.id);
-                                }
-                            } else {
-                                activateMemoInternal(memo, element, config);
-                                // クリック直後、マウスが要素上にある場合の処理は mouseenter イベントでカバーされるはず
-                                // (click前にenterしているので)。ただ、念のため手動で呼んでも良いが、
-                                // イベント順序的に click 前に mouseenter が来ているはず。
-                            }
-                        };
-
-                        element.addEventListener('click', handleClick, true);
-                        element.addEventListener('mouseenter', handleMouseEnter);
-                        element.addEventListener('mouseleave', handleMouseLeave);
-
-                        cleanupFunctionsRef.current.push(() => {
-                            element.removeEventListener('click', handleClick, true);
-                            element.removeEventListener('mouseenter', handleMouseEnter);
-                            element.removeEventListener('mouseleave', handleMouseLeave);
-                        });
-                    }
-
-                    // focus トリガー
-                    if (config.trigger === 'focus') {
-                        const handleFocusIn = () => {
-                            activateMemoInternal(memo, element, config);
-                        };
-
-                        const handleFocusOut = () => {
-                            if (config.hideCondition === 'trigger-end') {
-                                deactivateMemoInternal(memo.id);
-                            }
-                        };
-
-                        element.addEventListener('focusin', handleFocusIn);
-                        element.addEventListener('focusout', handleFocusOut);
-
-                        cleanupFunctionsRef.current.push(() => {
-                            element.removeEventListener('focusin', handleFocusIn);
-                            element.removeEventListener('focusout', handleFocusOut);
-                        });
+                    const elementKey = `${memo.id}:${config.selector}`;
+                    if ((element as any).__pageminder_registered !== elementKey) {
+                        newElementsFound++;
+                        setupListenersForElement(memo, element, config);
                     }
                 });
             } catch (error) {
@@ -288,13 +310,109 @@ export function useActivation(
             }
         }
 
+        if (newElementsFound > 0) {
+            logger.info('Activation: New elements found and registered', { count: newElementsFound });
+        }
+    }, [setupListenersForElement]);
+
+    // メモの変更を監視してイベントリスナーを設定
+    useEffect(() => {
+        // 1. 以前のリスナーをクリーンアップ
+        cleanupFunctionsRef.current.forEach(cleanup => cleanup());
+        cleanupFunctionsRef.current = [];
+
+        // 2. MutationObserverをクリーンアップ
+        if (observerRef.current) {
+            observerRef.current.disconnect();
+            observerRef.current = null;
+        }
+        if (rescanTimeoutRef.current) {
+            clearTimeout(rescanTimeoutRef.current);
+            rescanTimeoutRef.current = null;
+        }
+
+        // 3. アクティブ化が有効なメモをフィルタ
+        const activatableMemos = memos.filter(
+            memo => memo.activation?.enabled && memo.activation?.selector
+        );
+
+        if (activatableMemos.length === 0) {
+            logger.debug('No activatable memos found');
+            return;
+        }
+
+        logger.info('Activation: Setting up listeners', {
+            memoCount: activatableMemos.length,
+            selectors: activatableMemos.map(m => m.activation?.selector)
+        });
+
+        // 4. 初回スキャン
+        scanAndSetupListeners(activatableMemos);
+
+        // 4.5. 初回ロード時の遅延リトライ（DOMがまだ構築中の場合に対応）
+        // SPAやSlowなページでは、要素が後から追加される可能性があるため
+        const retryTimeouts: ReturnType<typeof setTimeout>[] = [];
+        [500, 1500, 3000].forEach(delay => {
+            const timeoutId = setTimeout(() => {
+                logger.debug('Activation: Delayed rescan', { delay });
+                scanAndSetupListeners(activatableMemos);
+            }, delay);
+            retryTimeouts.push(timeoutId);
+        });
+
+        // 5. MutationObserverで動的DOM変更を監視
+        const debounceRescan = () => {
+            if (rescanTimeoutRef.current) {
+                clearTimeout(rescanTimeoutRef.current);
+            }
+            // 100msのデバウンスで再スキャン
+            rescanTimeoutRef.current = setTimeout(() => {
+                scanAndSetupListeners(activatableMemos);
+            }, 100);
+        };
+
+        observerRef.current = new MutationObserver((mutations) => {
+            // 追加されたノードがあるか確認
+            let hasAddedNodes = false;
+            for (const mutation of mutations) {
+                if (mutation.addedNodes.length > 0) {
+                    hasAddedNodes = true;
+                    break;
+                }
+            }
+
+            if (hasAddedNodes) {
+                debounceRescan();
+            }
+        });
+
+        // body全体を監視（childList + subtree）
+        observerRef.current.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+
+        logger.debug('MutationObserver started for activation');
+
         return () => {
             cleanupFunctionsRef.current.forEach(cleanup => cleanup());
             cleanupFunctionsRef.current = [];
             timeoutIdsRef.current.forEach(id => clearTimeout(id));
             timeoutIdsRef.current.clear();
+
+            // 遅延リトライのタイムアウトをクリア
+            retryTimeouts.forEach(id => clearTimeout(id));
+
+            if (observerRef.current) {
+                observerRef.current.disconnect();
+                observerRef.current = null;
+            }
+            if (rescanTimeoutRef.current) {
+                clearTimeout(rescanTimeoutRef.current);
+                rescanTimeoutRef.current = null;
+            }
         };
-    }, [memos]);
+    }, [memos, scanAndSetupListeners]);
 
     return {
         deactivateMemo: deactivateMemoInternal,
