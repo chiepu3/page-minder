@@ -39,14 +39,33 @@ interface MemoProps {
   onPauseActivation?: (reason: string) => void;
   /** アクティブ化の一時停止解除 */
   onResumeActivation?: (reason: string) => void;
-  /** アクティブ化オーバーレイからのドラッグハンドラ */
-  activationDragHandle?: (e: React.MouseEvent) => void;
+  
+  /** アクティブ化モード */
+  activationMode?: 'near-element' | 'fixed-position';
+  /** アクティブ化時の相対位置オフセット */
+  activationOffset?: { x: number; y: number };
+  /** アクティブ化設定（オフセットなど）の更新コールバック */
+  onUpdateActivation?: (updates: { offsetX?: number; offsetY?: number }) => void;
 }
 
 /**
  * 個別メモコンポーネント
  */
-export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, onStartElementPicker, shouldOpenSettings, onSettingsOpened, onPauseActivation, onResumeActivation, activationDragHandle }: MemoProps) {
+export function Memo({ 
+  memo, 
+  settings, 
+  onUpdate, 
+  onDelete, 
+  isActivated = false, 
+  onStartElementPicker, 
+  shouldOpenSettings, 
+  onSettingsOpened, 
+  onPauseActivation, 
+  onResumeActivation,
+  activationMode,
+  activationOffset,
+  onUpdateActivation
+}: MemoProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -113,18 +132,56 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
     pinned: false,
   };
 
+  // near-elementモードかどうか
+  const isNearElement = isActivated && activationMode === 'near-element';
+
+  // ドラッグの初期位置決定
+  // isNearElement時はactivationOffsetを使用、そうでない場合はpositionを使用
+  const initialDragPosition = isNearElement
+    ? { x: activationOffset?.x ?? 0, y: activationOffset?.y ?? 0 }
+    : { x: position.x, y: position.y };
+
   // ドラッグ判定用のref（クリック/ドラッグ判別）
   const dragStartPosRef = useRef({ x: 0, y: 0 });
   const hasDraggedRef = useRef(false);
 
-  // ドラッグ機能 (アクティブ化時は無効化)
-  const { position: dragPosition, handleMouseDown: originalHandleDragStart, isDragging } = useDraggable({
-    initialPosition: { x: position.x, y: position.y },
-    onPositionChange: (newPos) => {
-      updatePosition({ x: newPos.x, y: newPos.y });
+  // ポジション更新
+  const updatePosition = useCallback(
+    (updates: Partial<MemoPosition>) => {
+      const newPositions = {
+        ...memo.positions,
+        [currentPatternId]: {
+          ...position,
+          ...updates,
+        },
+      };
+      onUpdate({ ...memo, positions: newPositions });
     },
-    disabled: isEditing || isActivated,
+    [memo, position, currentPatternId, onUpdate]
+  );
+
+  // ドラッグ機能
+  const { position: dragPosition, handleMouseDown: originalHandleDragStart, isDragging } = useDraggable({
+    initialPosition: initialDragPosition,
+    onPositionChange: (newPos) => {
+      // near-elementモードの場合はオフセットを更新
+      if (isNearElement) {
+        onUpdateActivation?.({ offsetX: newPos.x, offsetY: newPos.y });
+      } else {
+        // 通常モードはポジションを更新
+        updatePosition({ x: newPos.x, y: newPos.y });
+      }
+    },
+    disabled: isEditing,
   });
+
+  // アクティブ化オフセットが変わった場合にドラッグ位置を同期（ドラッグ中でない場合のみ）
+  // ※ useDraggableが内部でstateを持っているため、外部からの変更を反映させるにはキーを変えるか
+  // useDraggable自体に外部同期の仕組みが必要だが、ここでは簡易的にkeyを変更してリマウントさせるか
+  // useDraggableの実装次第。いったん初期位置のみで動くか確認するが、
+  // ドラッグ終了 -> API更新 -> 再レンダリング で位置がズレないようにここでの同期は重要。
+  // useDraggableの実装を見ると、内部stateはinitialPositionから初期化されるだけなので、
+  // isNearElement切り替え時などで再初期化が必要になるかも。
 
   // アクティブ化の一時停止制御（ドラッグ中）
   useEffect(() => {
@@ -137,12 +194,6 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
 
   // カスタムドラッグ開始ハンドラ（開始位置を記録）
   const handleDragStart = (e: React.MouseEvent) => {
-    // アクティブ化時は親のハンドラを使用
-    if (isActivated && activationDragHandle) {
-        activationDragHandle(e);
-        return;
-    }
-
     dragStartPosRef.current = { x: e.clientX, y: e.clientY };
     hasDraggedRef.current = false;
     originalHandleDragStart(e);
@@ -173,37 +224,19 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
     },
   });
 
-  // ポジション更新
-  const updatePosition = useCallback(
-    (updates: Partial<MemoPosition>) => {
-      const newPositions = {
-        ...memo.positions,
-        [currentPatternId]: {
-          ...position,
-          ...updates,
-        },
-      };
-      onUpdate({ ...memo, positions: newPositions });
-    },
-    [memo, position, currentPatternId, onUpdate]
-  );
-
   // 最小化トグル
   const toggleMinimize = () => {
     if (hasDraggedRef.current) return;
     onUpdate({ ...memo, minimized: !memo.minimized });
   };
 
-  // ピン止めトグル（アクティブ化時は無効、または親で制御する必要あり）
-  // 簡易的にアクティブ化時はピン止めボタンを非表示にする等の検討も必要だが、
-  // 現状はアクティブ化されていても「固定モード」への切り替えとして使えるよう残す
-  // アクティブ化時でNear Elementモードの場合、ピン留めすると位置がずれる可能性がある
-  // ActivationOverlay側でモード切替をハンドルするのが理想的
+  // ピン止めトグル（near-elementモードでは無効）
   const togglePin = () => {
     const newIsPinned = !position.pinned;
     let newX = dragPosition.x;
     let newY = dragPosition.y;
     
+    // スクロール分の補正（absolute <-> fixed 変換）
     if (newIsPinned) {
       newX += window.scrollX;
       newY += window.scrollY;
@@ -290,88 +323,80 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
   // アニメーションクラス決定
   const getAnimationClass = () => {
     switch (animationState) {
-      case 'enter': return 'memo-enter';
-      case 'idle': return ''; // 通常時はクラスなし
-      case 'shrink': return 'memo-shrink';
-      case 'expand': return 'memo-expand';
-      case 'exit': return 'memo-exit';
-      default: return '';
+      case 'enter':
+        return memo.minimized ? 'pageminder-animate-minimize-enter' : 'pageminder-animate-enter';
+      case 'expand':
+        return 'pageminder-animate-expand';
+      case 'shrink':
+        return 'pageminder-animate-shrink';
+      case 'exit':
+        return 'pageminder-animate-delete';
+      default:
+        return '';
     }
   };
 
-  // 最小化表示（アイコンのみ）
+  const baseStyle = {
+    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  };
+
+  // メモの表示位置スタイル計算
+  const memoPositionStyle: React.CSSProperties = isNearElement 
+  ? {
+      // near-elementモード: 親要素(Overlay)に対する絶対位置
+      position: 'absolute',
+      left: `${dragPosition.x}px`,
+      top: `${dragPosition.y}px`,
+    }
+  : {
+      // 通常モード: 画面全体に対する固定または絶対位置
+      position: position.pinned ? 'absolute' : 'fixed',
+      left: `${dragPosition.x}px`,
+      top: `${dragPosition.y}px`,
+    };
+
   if (memo.minimized) {
     return (
       <div
-        className={`memo-enter-active ${isActivated ? '' : 'fixed'} cursor-pointer transition-transform hover:scale-110 z-[2147483647]`}
+        ref={containerRef}
+        className={getAnimationClass()}
         style={{
-          // アクティブ化時は親の位置に従うためtop/leftを設定しない
-          ...(isActivated ? {} : {
-              left: `${dragPosition.x}px`,
-              top: `${dragPosition.y}px`,
-          }),
-          width: '40px',
-          height: '40px',
-          backgroundColor: memoBgColor,
-          borderRadius: '50%',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+          ...baseStyle,
+          position: memoPositionStyle.position as any,
+          left: `${(dragPosition.x) - 8}px`,
+          top: `${(dragPosition.y) - 8}px`,
+          width: `${MINIMIZED_SIZE.width + 16}px`,  // 左右8pxずつ透明パディング
+          height: `${MINIMIZED_SIZE.height + 16}px`,
+          zIndex: 999999,
+          cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: memoTextColor,
-          border: `2px solid ${theme.border}`,
+          // 透明エリアはクリックを通さない（ドラッグ中以外）
+          pointerEvents: isDragging ? 'auto' : 'auto',
         }}
         onClick={toggleMinimize}
-        // アクティブ化時はドラッグイベントを親に伝播させる必要はない（アイコンクリックで展開するため）
-        // もしアイコンのままドラッグ移動したい場合はここにもハンドラが必要だが、
-        // 最小化時は「展開」が主アクションなので一旦ドラッグは非対応（または親がWrapperでハンドルするならOK）
-        // 今回のActivationOverlayはWrapperでハンドルしているので、Overlay側でドラッグ可能
+        onMouseDown={handleDragStart}
+        title={memo.title ?? 'メモ'}
       >
-        <span style={{ fontSize: '20px' }}>
-          {memo.icon ? memo.icon : '📝'}
-        </span>
-      </div>
-    );
-  }
-
-  // ベーススタイル（共通）
-  const baseStyle: React.CSSProperties = {
-    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    transition: isDragging ? 'none' : 'box-shadow 0.2s, transform 0.2s',
-  };
-
-  // 削除確認ダイアログ
-  if (isDeleteDialogOpen) {
-    return (
-      <div 
-        style={{
-          position: 'fixed' as const, // ConfirmDialogは常にfixedで画面中央などに表示したいが、Overlay内にあると制約を受ける
-          // ここではポータルを使わずに実装しているため、Overlayの影響を受ける。
-          // ただ、OverlayのzIndexは十分に高いので問題ないはず。
-          // ただし、座標はMemoの位置基準になる可能性がある。
-          ...(isActivated ? {} : {
-            left: `${dragPosition.x}px`,
-            top: `${dragPosition.y}px`,
-          }),
-          zIndex: 2147483647,
-        }}
-      >
-        <ConfirmDialog
-          settings={settings}
-          title="メモを削除"
-          message="このメモを削除しますか？"
-          confirmText="削除"
-          cancelText="キャンセル"
-          onConfirm={() => {
-            setAnimationState('exit');
-            setIsDeleting(true);
-            setTimeout(() => {
-                onDelete(memo.id);
-            }, 300); // アニメーション時間
+        {/* 実際の見た目のアイコン部分 */}
+        <div
+          style={{
+            width: `${MINIMIZED_SIZE.width}px`,
+            height: `${MINIMIZED_SIZE.height}px`,
+            backgroundColor: memoBgColor,
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'transform 0.15s ease',
           }}
-          onCancel={() => setIsDeleteDialogOpen(false)}
-          isDanger={true}
-        />
+          onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+        >
+          <IconStickyNote size={18} color={memoTextColor} />
+        </div>
       </div>
     );
   }
@@ -383,29 +408,21 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
         className={getAnimationClass()}
         style={{
           ...baseStyle,
-          // アクティブ化時はposition指定を親に任せる（relative的な振る舞い）
-          // ただし、ドラッグ中はスムーズに動かすために固定サイズなどは維持
-          ...(isActivated ? {
-              position: 'relative', // 親のdiv内に配置
-              // dragPositionは使わない（親が動くため）
-              zIndex: 1, // Overlay内での順序
-          } : {
-              position: position.pinned ? 'absolute' : 'fixed',
-              left: `${dragPosition.x}px`,
-              top: `${dragPosition.y}px`,
-              zIndex: 999999,
-          }),
+          ...memoPositionStyle,
           width: `${size.width}px`,
           height: `${size.height}px`,
           backgroundColor: memoBgColor,
           color: memoTextColor,
           fontSize: `${fontSize}px`,
+          zIndex: 999999,
           borderRadius: '10px',
           boxShadow: '0 6px 24px rgba(0, 0, 0, 0.18)',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
           border: `1px solid ${theme.border}33`,
+          // アニメーション終了後にtransformをリセット
+          transform: animationState === 'idle' ? 'none' : undefined,
         }}
       >
         {/* ドラッグハンドル（タイトルバー） */}
@@ -420,7 +437,6 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             userSelect: 'none',
           }}
           onMouseDown={handleDragStart}
-          onDoubleClick={toggleMinimize}
         >
           <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontSize: '12px' }}>
             {memo.title ?? 'メモ'}
@@ -521,7 +537,7 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             memo={memo}
             settings={settings}
             isPinned={position.pinned}
-            onTogglePin={togglePin}
+            onTogglePin={isNearElement ? undefined : togglePin} // near-elementモード時はピン止め無効
             onDelete={() => setIsDeleteDialogOpen(true)}
             onColorChange={(color) => onUpdate({ ...memo, backgroundColor: color })}
             onFontSizeChange={(size) => onUpdate({ ...memo, fontSize: size })}

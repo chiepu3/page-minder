@@ -20,7 +20,7 @@ interface MemoToolbarProps {
   memo: Memo;
   settings: GlobalSettings;
   isPinned: boolean;
-  onTogglePin: () => void;
+  onTogglePin?: () => void;
   onDelete: () => void;
   onColorChange: (color: string) => void;
   onFontSizeChange: (size: number) => void;
@@ -77,12 +77,14 @@ export function MemoToolbar({
     >
       {/* 左側アイコン */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-        <ToolbarButton
-          icon={isPinned ? <IconPinOff size={16} /> : <IconPin size={16} />}
-          title={isPinned ? 'ピン解除' : 'ピン止め'}
-          onClick={onTogglePin}
-          active={isPinned}
-        />
+        {onTogglePin && (
+          <ToolbarButton
+            icon={isPinned ? <IconPinOff size={16} /> : <IconPin size={16} />}
+            title={isPinned ? 'ピン解除' : 'ピン止め'}
+            onClick={onTogglePin}
+            active={isPinned}
+          />
+        )}
         <ToolbarButton 
           icon={<IconCopy size={16} />} 
           title="コピー" 
