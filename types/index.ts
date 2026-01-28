@@ -12,6 +12,7 @@
 export interface Memo {
     id: string;                          // UUID
     title?: string;                      // タイトル（optional）
+    icon?: string;                       // アイコン（emojiなど）
     content: string;                     // 本文（Markdown対応）
     fontSize?: number;                   // フォントサイズ（px）
     backgroundColor?: string;            // 背景色（hex）

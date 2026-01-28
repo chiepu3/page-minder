@@ -25,8 +25,6 @@ interface MemoToolbarProps {
   onColorChange: (color: string) => void;
   onFontSizeChange: (size: number) => void;
   onOpenSettings: () => void;
-  /** ピン留めボタンを非表示にする（アクティブ化周辺モード用） */
-  hidePinButton?: boolean;
 }
 
 /**
@@ -41,7 +39,6 @@ export function MemoToolbar({
   onColorChange,
   onFontSizeChange,
   onOpenSettings,
-  hidePinButton = false,
 }: MemoToolbarProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showFontSizePicker, setShowFontSizePicker] = useState(false);
@@ -80,14 +77,12 @@ export function MemoToolbar({
     >
       {/* 左側アイコン */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-        {!hidePinButton && (
-          <ToolbarButton
-            icon={isPinned ? <IconPinOff size={16} /> : <IconPin size={16} />}
-            title={isPinned ? 'ピン解除' : 'ピン止め'}
-            onClick={onTogglePin}
-            active={isPinned}
-          />
-        )}
+        <ToolbarButton
+          icon={isPinned ? <IconPinOff size={16} /> : <IconPin size={16} />}
+          title={isPinned ? 'ピン解除' : 'ピン止め'}
+          onClick={onTogglePin}
+          active={isPinned}
+        />
         <ToolbarButton 
           icon={<IconCopy size={16} />} 
           title="コピー" 

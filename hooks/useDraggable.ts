@@ -12,6 +12,7 @@ interface Position {
 interface UseDraggableOptions {
     initialPosition: Position;
     onPositionChange?: (position: Position) => void;
+    onDragEnd?: (position: Position) => void;
     disabled?: boolean;
 }
 
@@ -27,6 +28,7 @@ interface UseDraggableReturn {
 export function useDraggable({
     initialPosition,
     onPositionChange,
+    onDragEnd,
     disabled = false,
 }: UseDraggableOptions): UseDraggableReturn {
     const [position, setPosition] = useState<Position>(initialPosition);
@@ -68,6 +70,7 @@ export function useDraggable({
         const handleMouseUp = () => {
             setIsDragging(false);
             onPositionChange?.(position);
+            onDragEnd?.(position);
         };
 
         document.addEventListener('mousemove', handleMouseMove);
