@@ -201,10 +201,25 @@ export function MemoContainer() {
     // 前のメモ状態が渡されていない場合は、現在のメモ一覧から取得
     const existingMemo = prevMemo ?? memos.find(m => m.id === updatedMemo.id);
 
-    // 内容が変更された場合は即時保存（編集完了時に確実に保存されるようにする）
+    // 重要な変更は即時保存（デバウンスしない）
+    // - 内容（content）の変更
+    // - タイトルの変更
+    // - URLパターンの変更
+    // - アクティブ化設定の変更
+    // - 色・フォントサイズの変更
+    // ※位置（position）のみの変更はドラッグ中に頻繁に発生するためデバウンス
     const isContentChange = existingMemo?.content !== updatedMemo.content;
+    const isTitleChange = existingMemo?.title !== updatedMemo.title;
+    const isUrlPatternChange = JSON.stringify(existingMemo?.urlPatterns) !== JSON.stringify(updatedMemo.urlPatterns);
+    const isActivationChange = JSON.stringify(existingMemo?.activation) !== JSON.stringify(updatedMemo.activation);
+    const isStyleChange = 
+      existingMemo?.backgroundColor !== updatedMemo.backgroundColor ||
+      existingMemo?.textColor !== updatedMemo.textColor ||
+      existingMemo?.fontSize !== updatedMemo.fontSize;
 
-    await storage.saveMemo(updatedMemo, { immediate: isContentChange });
+    const shouldSaveImmediately = isContentChange || isTitleChange || isUrlPatternChange || isActivationChange || isStyleChange;
+
+    await storage.saveMemo(updatedMemo, { immediate: shouldSaveImmediately });
     setMemos((prev) =>
       prev.map((m) => (m.id === updatedMemo.id ? updatedMemo : m))
     );

@@ -570,14 +570,24 @@ function ActivationOverlayComponent({
 }
 
 // React.memoでラップして不要な再レンダリングを防止
-// 注意: updatedAtは編集時に変更されるため比較対象から除外
-// 代わりにコンテンツとアクティベーション設定を比較
+// 注意: 表示に影響するすべてのフィールドを比較する必要がある
 export const ActivationOverlay = memo(ActivationOverlayComponent, (prevProps, nextProps) => {
+    // メモの重要なフィールドが変更されたかチェック
+    const prevMemo = prevProps.memo;
+    const nextMemo = nextProps.memo;
+
     return (
-        prevProps.memo.id === nextProps.memo.id &&
-        prevProps.memo.content === nextProps.memo.content &&
-        prevProps.memo.activation?.offsetX === nextProps.memo.activation?.offsetX &&
-        prevProps.memo.activation?.offsetY === nextProps.memo.activation?.offsetY &&
+        prevMemo.id === nextMemo.id &&
+        prevMemo.content === nextMemo.content &&
+        prevMemo.title === nextMemo.title &&
+        prevMemo.backgroundColor === nextMemo.backgroundColor &&
+        prevMemo.textColor === nextMemo.textColor &&
+        prevMemo.fontSize === nextMemo.fontSize &&
+        prevMemo.minimized === nextMemo.minimized &&
+        // URLパターンはJSON比較（配列のため）
+        JSON.stringify(prevMemo.urlPatterns) === JSON.stringify(nextMemo.urlPatterns) &&
+        // アクティベーション設定も全体を比較
+        JSON.stringify(prevMemo.activation) === JSON.stringify(nextMemo.activation) &&
         prevProps.triggerElement === nextProps.triggerElement &&
         prevProps.settings === nextProps.settings
     );
