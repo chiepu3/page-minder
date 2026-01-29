@@ -39,12 +39,14 @@ interface MemoProps {
   onPauseActivation?: (reason: string) => void;
   /** アクティブ化の一時停止解除 */
   onResumeActivation?: (reason: string) => void;
+  /** 同じページにマッチする他のメモのURLパターン */
+  existingPatterns?: import('@/types').UrlPattern[];
 }
 
 /**
  * 個別メモコンポーネント
  */
-export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, onStartElementPicker, shouldOpenSettings, onSettingsOpened, onPauseActivation, onResumeActivation }: MemoProps) {
+export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, onStartElementPicker, shouldOpenSettings, onSettingsOpened, onPauseActivation, onResumeActivation, existingPatterns = [] }: MemoProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -540,6 +542,7 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             onStartElementPicker?.(); // 親に伝える
           }}
           initialTab={shouldOpenSettings ? 'activation' : 'general'}
+          existingPatterns={existingPatterns}
         />
       )}
 

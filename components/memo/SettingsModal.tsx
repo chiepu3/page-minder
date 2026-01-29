@@ -17,6 +17,7 @@ interface SettingsModalProps {
   onStartElementPicker?: () => void;
   initialTab?: SettingsTab;
   onMount?: () => void;
+  existingPatterns?: UrlPattern[]; // 同じページにマッチする他のメモのパターン
 }
 
 type SettingsTab = 'general' | 'activation';
@@ -40,13 +41,14 @@ const DEFAULT_ACTIVATION: ActivationConfig = {
 /**
  * ページ内設定モーダル
  */
-export function SettingsModal({ memo, settings, onUpdate, onClose, onStartElementPicker, initialTab = 'general', onMount }: SettingsModalProps) {
+export function SettingsModal({ memo, settings, onUpdate, onClose, onStartElementPicker, initialTab = 'general', onMount, existingPatterns = [] }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [title, setTitle] = useState(memo.title || '');
   const [urlPatterns, setUrlPatterns] = useState<UrlPattern[]>(memo.urlPatterns);
   const [activation, setActivation] = useState<ActivationConfig>(memo.activation ?? DEFAULT_ACTIVATION);
   const [currentUrl, setCurrentUrl] = useState('');
   const [showElementPicker, setShowElementPicker] = useState(false);
+  const [showPatternSuggestions, setShowPatternSuggestions] = useState(false);
 
   // テーマ取得
   const theme = THEMES[settings.theme === 'system' ? 'dark' : settings.theme];
@@ -273,6 +275,94 @@ export function SettingsModal({ memo, settings, onUpdate, onClose, onStartElemen
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* 既存パターンの候補表示 */}
+              {existingPatterns.length > 0 && (
+                <div style={{ position: 'relative' }}>
+                  <button
+                    onClick={() => setShowPatternSuggestions(!showPatternSuggestions)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: `1px dashed ${theme.accent}`,
+                      backgroundColor: 'transparent',
+                      color: theme.accent,
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = theme.surface;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    既存のパターンを再利用 ({existingPatterns.length}件)
+                  </button>
+                  {showPatternSuggestions && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      marginTop: '4px',
+                      backgroundColor: theme.surface,
+                      border: `1px solid ${theme.border}`,
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                      zIndex: 10,
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                    }}>
+                      {existingPatterns.map((suggestedPattern, index) => (
+                        <button
+                          key={suggestedPattern.id || index}
+                          onClick={() => {
+                            // 最初のパターンを置き換え
+                            if (urlPatterns.length > 0) {
+                              updatePattern(urlPatterns[0].id, {
+                                type: suggestedPattern.type,
+                                pattern: suggestedPattern.pattern,
+                              });
+                            }
+                            setShowPatternSuggestions(false);
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            backgroundColor: 'transparent',
+                            border: 'none',
+                            borderBottom: index < existingPatterns.length - 1 ? `1px solid ${theme.border}` : 'none',
+                            color: theme.text,
+                            fontSize: '13px',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontFamily: 'monospace',
+                            wordBreak: 'break-all',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = theme.bg;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
+                        >
+                          <span style={{ color: theme.textSecondary, marginRight: '8px' }}>
+                            [{suggestedPattern.type}]
+                          </span>
+                          {suggestedPattern.pattern}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {urlPatterns.map((pattern) => {
                 const isValid = isValidUrlPattern(pattern);
                 const isMatch = matchUrlPattern(currentUrl, pattern);

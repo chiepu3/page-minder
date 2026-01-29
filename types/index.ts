@@ -229,7 +229,9 @@ export type MessageAction =
     | 'SCROLL_TO_MEMO'
     | 'MOVE_MEMO_TO_VISIBLE'
     | 'URL_CHANGED'
-    | 'OPEN_MEMO_SETTINGS';
+    | 'OPEN_MEMO_SETTINGS'
+    | 'GET_CLICKED_ELEMENT_SELECTOR'
+    | 'CREATE_MEMO_WITH_SETTINGS';
 
 /**
  * メッセージ構造

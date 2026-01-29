@@ -167,6 +167,24 @@ export function MemoContainer() {
         sendResponse({ success: true });
       }
 
+      // 右クリックされた要素のセレクタを取得（コンテキストメニュー用）
+      if (message.action === 'GET_CLICKED_ELEMENT_SELECTOR') {
+        // lastClickedElementはグローバル変数で追跡する必要がある
+        const selector = (window as any).__pageminder_last_clicked_selector || '';
+        sendResponse({ success: !!selector, selector });
+      }
+
+      // アクティブ化メモを作成（設定モーダルを自動で開く）
+      if (message.action === 'CREATE_MEMO_WITH_SETTINGS') {
+        const newMemo = message.payload as MemoType;
+        if (matchAnyUrlPattern(window.location.href, newMemo.urlPatterns)) {
+          setMemos((prev) => [...prev, newMemo]);
+          // 設定モーダルを自動で開く
+          setReopenSettingsForMemoId(newMemo.id);
+        }
+        sendResponse({ success: true });
+      }
+
       return true;
     };
 
@@ -266,23 +284,32 @@ export function MemoContainer() {
         if (reopenSettingsForMemoId === memo.id) return true;
         // それ以外（アクティブ化有効かつ設定中でない）は非表示
         return false;
-      }).map((memo) => (
-        <Memo
-          key={memo.id}
-          memo={memo}
-          settings={settings}
-          onUpdate={handleMemoUpdate}
-          onDelete={handleMemoDelete}
-          onStartElementPicker={() => {
-            setPickerTargetMemoId(memo.id);
-            setShowElementPicker(true);
-          }}
-          shouldOpenSettings={reopenSettingsForMemoId === memo.id}
-          onSettingsOpened={() => setReopenSettingsForMemoId(null)}
-          onPauseActivation={(reason) => pauseDeactivation(memo.id, reason)}
-          onResumeActivation={(reason) => resumeDeactivation(memo.id, reason)}
-        />
-      ))}
+      }).map((memo) => {
+        // 他のメモのURLパターンを収集（重複を除去）
+        const otherPatterns = memos
+          .filter(m => m.id !== memo.id)
+          .flatMap(m => m.urlPatterns)
+          .filter((p, idx, arr) => arr.findIndex(x => x.pattern === p.pattern) === idx);
+
+        return (
+          <Memo
+            key={memo.id}
+            memo={memo}
+            settings={settings}
+            onUpdate={handleMemoUpdate}
+            onDelete={handleMemoDelete}
+            onStartElementPicker={() => {
+              setPickerTargetMemoId(memo.id);
+              setShowElementPicker(true);
+            }}
+            shouldOpenSettings={reopenSettingsForMemoId === memo.id}
+            onSettingsOpened={() => setReopenSettingsForMemoId(null)}
+            onPauseActivation={(reason) => pauseDeactivation(memo.id, reason)}
+            onResumeActivation={(reason) => resumeDeactivation(memo.id, reason)}
+            existingPatterns={otherPatterns}
+          />
+        );
+      })}
 
       {/* アクティブ化されたメモのオーバーレイ表示 */}
       {Array.from(activatedMemos.entries()).map(([memoId, triggerElement]) => {

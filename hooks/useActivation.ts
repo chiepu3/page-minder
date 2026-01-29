@@ -171,6 +171,15 @@ export function useActivation(
             trigger: config.trigger
         });
 
+        // 子要素からのイベントも検出するためのヘルパー
+        // イベントターゲットが対象要素またはその子孫であるかをチェック
+        const isEventFromElementOrChild = (e: Event): boolean => {
+            const target = e.target as Element;
+            if (!target) return false;
+            // 対象要素自身か、その子孫要素からのイベントかをチェック
+            return element === target || element.contains(target);
+        };
+
         // hover トリガー
         if (config.trigger === 'hover') {
             let hoverTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -238,6 +247,11 @@ export function useActivation(
             };
 
             const handleClick = (e: Event) => {
+                // 子要素からのクリックも検出
+                if (!isEventFromElementOrChild(e)) {
+                    return;
+                }
+
                 if (config.clickStopPropagation && !clickedElementsRef.current.has(element)) {
                     e.stopPropagation();
                     e.preventDefault();
@@ -256,6 +270,7 @@ export function useActivation(
                 }
             };
 
+            // キャプチャフェーズでイベントを捕捉（子要素のクリックも確実に検出）
             element.addEventListener('click', handleClick, true);
             element.addEventListener('mouseenter', handleMouseEnter);
             element.addEventListener('mouseleave', handleMouseLeave);
