@@ -186,9 +186,50 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
 
     const isDarkMode = settings.theme === 'dark';
 
+    // Markdown書式ショートカット（選択範囲またはカーソル位置に適用）
+    function wrapSelection(view: EditorView, before: string, after: string) {
+      const { state } = view;
+      const changes = state.changeByRange((range) => {
+        if (range.empty) {
+          // カーソル位置に挿入してカーソルを中央に
+          const insert = before + after;
+          return {
+            changes: { from: range.from, insert },
+            range: { anchor: range.from + before.length, head: range.from + before.length },
+          };
+        }
+        const selectedText = state.sliceDoc(range.from, range.to);
+        const insert = before + selectedText + after;
+        return {
+          changes: { from: range.from, to: range.to, insert },
+          range: { anchor: range.from + before.length, head: range.from + before.length + selectedText.length },
+        };
+      });
+      view.dispatch(changes);
+      return true;
+    }
+
+    function wrapLine(view: EditorView, prefix: string) {
+      const { state } = view;
+      const line = state.doc.lineAt(state.selection.main.head);
+      const alreadyHas = line.text.startsWith(prefix);
+      const changes = alreadyHas
+        ? { from: line.from, to: line.from + prefix.length, insert: '' }
+        : { from: line.from, insert: prefix };
+      view.dispatch({ changes });
+      return true;
+    }
+
     const keymaps = keymap.of([
       ...defaultKeymap,
       ...historyKeymap,
+      { key: 'Mod-b', run: (v) => wrapSelection(v, '**', '**') },
+      { key: 'Mod-i', run: (v) => wrapSelection(v, '*', '*') },
+      { key: 'Mod-`', run: (v) => wrapSelection(v, '`', '`') },
+      { key: 'Mod-Shift-x', run: (v) => wrapSelection(v, '~~', '~~') },
+      { key: 'Mod-Shift-7', run: (v) => wrapLine(v, '1. ') },
+      { key: 'Mod-Shift-8', run: (v) => wrapLine(v, '- ') },
+      { key: 'Mod-Shift-9', run: (v) => wrapLine(v, '> ') },
       {
         key: 'Mod-Enter',
         run: (view) => {
