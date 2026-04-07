@@ -27,9 +27,16 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
     const textarea = textareaRef.current;
     if (!textarea) return;
 
+    const parent = textarea.parentElement;
+    const savedScrollTop = parent?.scrollTop ?? 0;
+
     // 一度高さをリセットしてからscrollHeightを取得
     textarea.style.height = 'auto';
     textarea.style.height = `${textarea.scrollHeight}px`;
+
+    if (parent) {
+      parent.scrollTop = savedScrollTop;
+    }
   }, []);
 
   // 初期フォーカス＆カーソルを末尾に＆高さ調整
