@@ -1,9 +1,11 @@
-// =============================================================================
-// PageMinder - Memo Editor Component (Markdown対応)
-// =============================================================================
-
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { GlobalSettings } from '@/types';
+import { useEffect, useRef, useCallback } from 'react';
+import { EditorView, keymap, Decoration, ViewPlugin, ViewUpdate, WidgetType } from '@codemirror/view';
+import { EditorState, Range } from '@codemirror/state';
+import { markdown } from '@codemirror/lang-markdown';
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { syntaxHighlighting, defaultHighlightStyle, indentOnInput, bracketMatching } from '@codemirror/language';
+import { oneDark } from '@codemirror/theme-one-dark';
+import type { GlobalSettings } from '@/types';
 
 interface MemoEditorProps {
   content: string;
@@ -13,92 +15,232 @@ interface MemoEditorProps {
   onChange?: (content: string) => void;
 }
 
-/**
- * Markdownメモ編集コンポーネント
- * - シンプルなtextarea（フルサイズ）
- * - キーボードショートカット: Ctrl+Enter で保存、Escape でキャンセル
- */
+const LINK_REGEX = /\[([^\]]*)\]\(([^)]*)\)/g;
+
+class LinkChipWidget extends WidgetType {
+  constructor(readonly text: string, readonly url: string, readonly isDark: boolean) {
+    super();
+  }
+
+  toDOM() {
+    const span = document.createElement('span');
+    span.className = 'cm-link-chip';
+    span.textContent = `\uD83D\uDCCC ${this.text}`;
+    span.title = this.url;
+    span.style.cssText = [
+      'display: inline-block',
+      'padding: 1px 6px',
+      'border-radius: 4px',
+      'cursor: pointer',
+      'font-size: inherit',
+      'line-height: 1.4',
+      'vertical-align: baseline',
+      this.isDark
+        ? 'background: rgba(255,255,255,0.1); color: #d1c4e9;'
+        : 'background: rgba(0,0,0,0.08); color: #7c3aed;',
+      'text-decoration: none',
+      'white-space: nowrap',
+    ].join(';');
+
+    span.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.open(this.url, '_blank', 'noopener');
+    });
+
+    return span;
+  }
+
+  ignoreEvent(event: Event): boolean {
+    return event.type === 'mousedown' || event.type === 'click';
+  }
+}
+
+function linkChipDecorations(view: EditorView, isDark: boolean): Range<Decoration>[] {
+  const doc = view.state.doc.toString();
+  const pos = view.state.selection.main.head;
+  const decorations: Range<Decoration>[] = [];
+
+  let match: RegExpExecArray | null;
+  const regex = new RegExp(LINK_REGEX.source, 'g');
+  while ((match = regex.exec(doc)) !== null) {
+    const from = match.index;
+    const to = match.index + match[0].length;
+
+    if (pos >= from && pos <= to) continue;
+
+    decorations.push(
+      Decoration.replace({
+        widget: new LinkChipWidget(match[1], match[2], isDark),
+      }).range(from, to)
+    );
+  }
+
+  return decorations;
+}
+
+function linkChipViewPlugin(isDark: boolean) {
+  return ViewPlugin.define((view) => ({
+    decorations: Decoration.set(linkChipDecorations(view, isDark), true),
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.selectionSet) {
+        this.decorations = Decoration.set(linkChipDecorations(update.view, isDark), true);
+      }
+    },
+  }), {
+    decorations: (v) => v.decorations,
+  });
+}
+
+const baseTheme = EditorView.theme({
+  '&': {
+    fontSize: 'inherit',
+    backgroundColor: 'transparent',
+    color: 'inherit',
+    height: '100%',
+  },
+  '.cm-scroller': {
+    fontFamily: 'inherit',
+    overflow: 'hidden',
+    lineHeight: '1.5',
+  },
+  '.cm-content': {
+    padding: '0',
+    caretColor: 'inherit',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+  },
+  '.cm-focused': {
+    outline: 'none',
+  },
+  '.cm-editor': {
+    outline: 'none',
+    border: 'none',
+  },
+  '.cm-gutters': {
+    display: 'none',
+  },
+  '.cm-activeLine': {
+    backgroundColor: 'transparent',
+  },
+  '.cm-placeholder': {
+    color: 'rgba(0,0,0,0.35)',
+    fontStyle: 'italic',
+  },
+  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
+    background: 'rgba(179, 157, 219, 0.3) !important',
+  },
+});
+
+const darkTheme = EditorView.theme({
+  '.cm-placeholder': {
+    color: 'rgba(255,255,255,0.35)',
+  },
+  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
+    background: 'rgba(179, 157, 219, 0.4) !important',
+  },
+});
+
 export function MemoEditor({ content, settings, onSave, onCancel, onChange }: MemoEditorProps) {
-  const [value, setValue] = useState(content);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const onSaveRef = useRef(onSave);
+  const onCancelRef = useRef(onCancel);
+  const onChangeRef = useRef(onChange);
 
-  // textareaの高さを内容に応じて自動調整
-  const adjustHeight = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
+  onSaveRef.current = onSave;
+  onCancelRef.current = onCancel;
+  onChangeRef.current = onChange;
 
-    const parent = textarea.parentElement;
-    const savedScrollTop = parent?.scrollTop ?? 0;
-
-    // 一度高さをリセットしてからscrollHeightを取得
-    textarea.style.height = 'auto';
-    textarea.style.height = `${textarea.scrollHeight}px`;
-
-    if (parent) {
-      parent.scrollTop = savedScrollTop;
-    }
+  const stopPropagationPlugin = useCallback(() => {
+    return EditorView.domEventHandlers({
+      keydown(event) {
+        event.stopPropagation();
+        return false;
+      },
+      keyup(event) {
+        event.stopPropagation();
+        return false;
+      },
+    });
   }, []);
 
-  // 初期フォーカス＆カーソルを末尾に＆高さ調整
   useEffect(() => {
-    textareaRef.current?.focus();
-    textareaRef.current?.setSelectionRange(value.length, value.length);
-    adjustHeight();
+    if (!editorRef.current) return;
+
+    const isDarkMode = settings.theme === 'dark';
+
+    const keymaps = keymap.of([
+      ...defaultKeymap,
+      ...historyKeymap,
+      {
+        key: 'Mod-Enter',
+        run: (view) => {
+          onSaveRef.current(view.state.doc.toString());
+          return true;
+        },
+      },
+      {
+        key: 'Escape',
+        run: () => {
+          onCancelRef.current();
+          return true;
+        },
+      },
+    ]);
+
+    const state = EditorState.create({
+      doc: content,
+      extensions: [
+        keymaps,
+        history(),
+        markdown(),
+        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        baseTheme,
+        isDarkMode ? oneDark : [],
+        isDarkMode ? darkTheme : [],
+        linkChipViewPlugin(isDarkMode),
+        stopPropagationPlugin(),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) {
+            onChangeRef.current?.(update.state.doc.toString());
+          }
+        }),
+        EditorView.lineWrapping,
+        indentOnInput(),
+        bracketMatching(),
+        EditorState.tabSize.of(2),
+      ],
+    });
+
+    const view = new EditorView({
+      state,
+      parent: editorRef.current,
+    });
+
+    viewRef.current = view;
+
+    view.focus();
+    view.dispatch({
+      selection: { anchor: view.state.doc.length },
+    });
+
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
   }, []);
 
-  // 値変更時に親に通知＆高さ調整
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value;
-    setValue(newValue);
-    onChange?.(newValue);
-    adjustHeight();
-  };
-
-  const [isComposing, setIsComposing] = useState(false);
-
-  // Escapeキーでキャンセル、Ctrl+Enterで保存
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (isComposing) return;
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      onSave(value);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      onCancel();
-    }
-  }, [value, onSave, onCancel, isComposing]);
-
   useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.addEventListener('keydown', handleKeyDown);
-    return () => el.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
+    const view = viewRef.current;
+    if (!view) return;
+    const currentDoc = view.state.doc.toString();
+    if (currentDoc !== content) {
+      view.dispatch({
+        changes: { from: 0, to: currentDoc.length, insert: content },
+      });
+    }
+  }, [content]);
 
-  return (
-    <textarea
-      ref={textareaRef}
-      value={value}
-      onChange={handleChange}
-      onKeyDown={(e) => e.stopPropagation()}
-      onKeyUp={(e) => e.stopPropagation()}
-      onCompositionStart={() => setIsComposing(true)}
-      onCompositionEnd={() => setIsComposing(false)}
-      style={{
-        width: '100%',
-        minHeight: '100%',  // 最低でも親要素の高さを確保
-        padding: '0',
-        border: 'none',
-        resize: 'none',
-        outline: 'none',
-        overflow: 'hidden',  // スクロールバーを非表示（親でスクロール）
-        backgroundColor: 'transparent',
-        color: 'inherit',
-        fontFamily: 'inherit',
-        fontSize: 'inherit',
-        lineHeight: 1.5,
-      }}
-      placeholder="Markdownで入力..."
-    />
-  );
+  return <div ref={editorRef} style={{ width: '100%', height: '100%', minHeight: '100%' }} />;
 }
