@@ -9,6 +9,7 @@
     "dev:firefox": "wxt -b firefox",
     "prebuild": "node scripts/bump-build.js",
     "build": "wxt build",
+    "build:noversion": "wxt build",
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
