@@ -3,7 +3,8 @@ import { EditorView, keymap, Decoration, ViewPlugin, ViewUpdate, WidgetType } fr
 import { EditorState, EditorSelection, Range } from '@codemirror/state';
 import { markdown } from '@codemirror/lang-markdown';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { syntaxHighlighting, defaultHighlightStyle, indentOnInput, bracketMatching } from '@codemirror/language';
+import { syntaxHighlighting, defaultHighlightStyle, indentOnInput, bracketMatching, HighlightStyle } from '@codemirror/language';
+import { tags } from '@lezer/highlight';
 import { oneDark } from '@codemirror/theme-one-dark';
 import type { GlobalSettings } from '@/types';
 
@@ -151,6 +152,10 @@ const darkTheme = EditorView.theme({
   },
 });
 
+const strikethroughStyle = HighlightStyle.define([
+  { tag: tags.strikethrough, textDecoration: 'line-through' },
+]);
+
 export function MemoEditor({ content, settings, onSave, onCancel, onChange }: MemoEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -173,9 +178,29 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
         return false;
       },
       wheel(event) {
-        // エディタにフォーカスがあるときはページのスクロールをブロック
         event.stopPropagation();
         return false;
+      },
+      paste(event, view) {
+        const clipboardText = event.clipboardData?.getData('text/plain') ?? '';
+        if (!/^https?:\/\//.test(clipboardText)) return false;
+        event.preventDefault();
+        const { state } = view;
+        const sel = state.selection.main;
+        if (!sel.empty) {
+          const selectedText = state.sliceDoc(sel.from, sel.to);
+          view.dispatch({
+            changes: { from: sel.from, to: sel.to, insert: `[${selectedText}](${clipboardText})` },
+            selection: EditorSelection.cursor(sel.from + selectedText.length + clipboardText.length + 4),
+          });
+        } else {
+          const insert = `[${clipboardText}](${clipboardText})`;
+          view.dispatch({
+            changes: { from: sel.from, insert },
+            selection: EditorSelection.cursor(sel.from + insert.length),
+          });
+        }
+        return true;
       },
     });
   }, []);
@@ -212,11 +237,13 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
     function wrapLine(view: EditorView, prefix: string) {
       const { state } = view;
       const line = state.doc.lineAt(state.selection.main.head);
-      const alreadyHas = line.text.startsWith(prefix);
-      const changes = alreadyHas
-        ? { from: line.from, to: line.from + prefix.length, insert: '' }
-        : { from: line.from, insert: prefix };
-      view.dispatch({ changes });
+      const stripped = line.text.replace(/^#{1,6}\s*/, '');
+      if (stripped === line.text && line.text.startsWith(prefix)) {
+        view.dispatch({ changes: { from: line.from, to: line.from + prefix.length, insert: '' } });
+      } else {
+        const removeLen = line.text.length - stripped.length;
+        view.dispatch({ changes: { from: line.from, to: line.from + removeLen, insert: prefix } });
+      }
       return true;
     }
 
@@ -224,13 +251,6 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
     const keymaps = keymap.of([
       {
         key: 'Mod-Enter',
-        run: (view) => {
-          onSaveRef.current(view.state.doc.toString());
-          return true;
-        },
-      },
-      {
-        key: 'Shift-Enter',
         run: (view) => {
           onSaveRef.current(view.state.doc.toString());
           return true;
@@ -250,6 +270,9 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
       { key: 'Mod-Shift-7', run: (v) => wrapLine(v, '1. ') },
       { key: 'Mod-Shift-8', run: (v) => wrapLine(v, '- ') },
       { key: 'Mod-Shift-9', run: (v) => wrapLine(v, '> ') },
+      { key: 'Alt-Shift-1', run: (v) => wrapLine(v, '# ') },
+      { key: 'Alt-Shift-2', run: (v) => wrapLine(v, '## ') },
+      { key: 'Alt-Shift-3', run: (v) => wrapLine(v, '### ') },
       ...defaultKeymap,
       ...historyKeymap,
     ]);
@@ -261,6 +284,7 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
         history(),
         markdown(),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        syntaxHighlighting(strikethroughStyle),
         baseTheme,
         isDarkMode ? oneDark : [],
         isDarkMode ? darkTheme : [],
