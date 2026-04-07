@@ -9,6 +9,8 @@ import { DEFAULT_SETTINGS } from '@/lib/constants';
 import { MemoTable, SettingsPanel, ImportExportPanel } from '@/components/options';
 import { IconStickyNote, IconSettings, IconDarkMode, IconLightMode } from '@/components/icons';
 
+const VERSION = browser.runtime.getManifest().version;
+
 type TabType = 'memos' | 'settings' | 'import-export';
 
 function App() {
@@ -167,7 +169,7 @@ function App() {
 
             {/* Footer */}
             <footer className="options-footer">
-                <p>PageMinder v0.5.0</p>
+                <p>PageMinder v{VERSION}</p>
             </footer>
         </div>
     );

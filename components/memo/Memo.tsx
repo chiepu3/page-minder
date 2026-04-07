@@ -485,6 +485,7 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
                   style={{ 
                     backgroundColor: 'transparent',
                     fontSize: 'inherit',
+                    pointerEvents: 'none',
                   }}
                 />
               ) : (
