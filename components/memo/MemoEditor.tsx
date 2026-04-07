@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { EditorView, keymap, Decoration, ViewPlugin, ViewUpdate, WidgetType } from '@codemirror/view';
-import { EditorState, Range } from '@codemirror/state';
+import { EditorState, EditorSelection, Range } from '@codemirror/state';
 import { markdown } from '@codemirror/lang-markdown';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { syntaxHighlighting, defaultHighlightStyle, indentOnInput, bracketMatching } from '@codemirror/language';
@@ -192,16 +192,17 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
         if (range.empty) {
           // カーソル位置に挿入してカーソルを中央に
           const insert = before + after;
+          const cursorPos = range.from + before.length;
           return {
             changes: { from: range.from, insert },
-            range: { anchor: range.from + before.length, head: range.from + before.length },
+            range: EditorSelection.cursor(cursorPos),
           };
         }
         const selectedText = state.sliceDoc(range.from, range.to);
         const insert = before + selectedText + after;
         return {
           changes: { from: range.from, to: range.to, insert },
-          range: { anchor: range.from + before.length, head: range.from + before.length + selectedText.length },
+          range: EditorSelection.range(range.from + before.length, range.from + before.length + selectedText.length),
         };
       });
       view.dispatch(changes);
