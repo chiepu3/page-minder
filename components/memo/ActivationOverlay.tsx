@@ -12,11 +12,12 @@ interface ActivationOverlayProps {
     triggerElement: Element;
     settings: GlobalSettings;
     onUpdate: (memo: Memo) => void;
-    onDelete: (memoId: string) => void; // データの削除
-    onClose: () => void; // 非表示（アクティブ化解除）
+    onDelete: (memoId: string) => void;
+    onClose: () => void;
     onStartElementPicker: (memoId: string) => void;
     onPauseActivation: (reason: string) => void;
     onResumeActivation: (reason: string) => void;
+    isHiddenByVisibility?: boolean;
 }
 
 interface RulerInfo {
@@ -44,8 +45,6 @@ interface DragCache {
     elementRect: DOMRect;
     overlayWidth: number;
     overlayHeight: number;
-    scrollX: number;
-    scrollY: number;
 }
 
 /**
@@ -62,10 +61,12 @@ function ActivationOverlayComponent({
     onStartElementPicker,
     onPauseActivation,
     onResumeActivation,
+    isHiddenByVisibility = false,
 }: ActivationOverlayProps) {
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const [ruler, setRuler] = useState<RulerInfo>({ visible: false });
+    const [isTriggerVisible, setIsTriggerVisible] = useState(true);
     const overlayRef = useRef<HTMLDivElement>(null);
     const dragStartRef = useRef({ mouseX: 0, mouseY: 0, offsetX: 0, offsetY: 0 });
     const config = memo.activation;
@@ -107,6 +108,7 @@ function ActivationOverlayComponent({
     }, [triggerElement]);
 
     // 表示位置を計算（キャッシュされたサイズを使用）
+    // position: fixed + viewport座標で統一（transform/zoomの影響を回避）
     const calculatePosition = useCallback(() => {
         if (!config) return { x: 0, y: 0 };
 
@@ -115,23 +117,20 @@ function ActivationOverlayComponent({
             const offsetX = config.offsetX ?? 10;
             const offsetY = config.offsetY ?? 10;
 
-            // 要素の右下に配置（スクロール位置を加算）
-            let x = rect.right + offsetX + window.scrollX;
-            let y = rect.bottom + offsetY + window.scrollY;
+            let x = rect.right + offsetX;
+            let y = rect.bottom + offsetY;
 
-            // 画面外にはみ出る場合は調整（キャッシュされたサイズを使用）
             const { width: overlayWidth, height: overlayHeight } = overlaySize.current;
 
-            if (x + overlayWidth > window.innerWidth + window.scrollX) {
-                x = rect.left - overlayWidth - offsetX + window.scrollX;
+            if (x + overlayWidth > window.innerWidth) {
+                x = rect.left - overlayWidth - offsetX;
             }
-            if (y + overlayHeight > window.innerHeight + window.scrollY) {
-                y = rect.top - overlayHeight - offsetY + window.scrollY;
+            if (y + overlayHeight > window.innerHeight) {
+                y = rect.top - overlayHeight - offsetY;
             }
 
             return { x: Math.max(0, x), y: Math.max(0, y) };
         } else {
-            // fixed-position: メモ本来の位置を使用
             const patternId = memo.urlPatterns[0]?.id ?? 'default';
             const memoPosition = memo.positions[patternId];
             if (memoPosition) {
@@ -157,35 +156,33 @@ function ActivationOverlayComponent({
         const overlayWidth = cachedOverlayWidth ?? overlaySize.current.width;
         const overlayHeight = cachedOverlayHeight ?? overlaySize.current.height;
 
-        // メモの中心座標（スクロール補正前のビューポート座標）
-        const memoViewX = memoX - window.scrollX;
-        const memoViewY = memoY - window.scrollY;
-        const memoCenterX = memoViewX + overlayWidth / 2;
-        const memoCenterY = memoViewY + overlayHeight / 2;
+        // メモの中心座標（viewport座標）
+        const memoCenterX = memoX + overlayWidth / 2;
+        const memoCenterY = memoY + overlayHeight / 2;
 
         // メモが要素の右にあるか左にあるか
-        const isRight = memoViewX >= rect.right;
-        const isLeft = memoViewX + overlayWidth <= rect.left;
-        const isBelow = memoViewY >= rect.bottom;
-        const isAbove = memoViewY + overlayHeight <= rect.top;
+        const isRight = memoX >= rect.right;
+        const isLeft = memoX + overlayWidth <= rect.left;
+        const isBelow = memoY >= rect.bottom;
+        const isAbove = memoY + overlayHeight <= rect.top;
 
         let horizontalLine: RulerInfo['horizontalLine'];
         let verticalLine: RulerInfo['verticalLine'];
 
         // 水平方向のルーラー
         if (isRight) {
-            const distance = memoViewX - rect.right;
+            const distance = memoX - rect.right;
             horizontalLine = {
                 x1: rect.right,
                 y1: memoCenterY,
-                x2: memoViewX,
+                x2: memoX,
                 y2: memoCenterY,
                 distance: Math.round(distance),
             };
         } else if (isLeft) {
-            const distance = rect.left - (memoViewX + overlayWidth);
+            const distance = rect.left - (memoX + overlayWidth);
             horizontalLine = {
-                x1: memoViewX + overlayWidth,
+                x1: memoX + overlayWidth,
                 y1: memoCenterY,
                 x2: rect.left,
                 y2: memoCenterY,
@@ -195,19 +192,19 @@ function ActivationOverlayComponent({
 
         // 垂直方向のルーラー
         if (isBelow) {
-            const distance = memoViewY - rect.bottom;
+            const distance = memoY - rect.bottom;
             verticalLine = {
                 x1: memoCenterX,
                 y1: rect.bottom,
                 x2: memoCenterX,
-                y2: memoViewY,
+                y2: memoY,
                 distance: Math.round(distance),
             };
         } else if (isAbove) {
-            const distance = rect.top - (memoViewY + overlayHeight);
+            const distance = rect.top - (memoY + overlayHeight);
             verticalLine = {
                 x1: memoCenterX,
-                y1: memoViewY + overlayHeight,
+                y1: memoY + overlayHeight,
                 x2: memoCenterX,
                 y2: rect.top,
                 distance: Math.round(distance),
@@ -281,6 +278,11 @@ function ActivationOverlayComponent({
             if (pending) return;
             pending = true;
             rafId = requestAnimationFrame(() => {
+                if (config?.positionMode === 'near-element') {
+                    const rect = triggerElement.getBoundingClientRect();
+                    const isVisible = !(rect.bottom < 0 || rect.top > window.innerHeight || rect.right < 0 || rect.left > window.innerWidth);
+                    setIsTriggerVisible(isVisible);
+                }
                 const pos = calculatePosition();
                 setPosition(pos);
                 pending = false;
@@ -295,7 +297,7 @@ function ActivationOverlayComponent({
             window.removeEventListener('resize', handleUpdate);
             if (rafId !== null) cancelAnimationFrame(rafId);
         };
-    }, [isDragging, calculatePosition]);
+    }, [isDragging, calculatePosition, config, triggerElement]);
 
     // ドラッグ開始
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -310,8 +312,6 @@ function ActivationOverlayComponent({
             elementRect: triggerElement.getBoundingClientRect(),
             overlayWidth: overlaySize.current.width,
             overlayHeight: overlaySize.current.height,
-            scrollX: window.scrollX,
-            scrollY: window.scrollY,
         };
 
         dragStartRef.current = {
@@ -349,28 +349,18 @@ function ActivationOverlayComponent({
                 const newOffsetX = dragStartRef.current.offsetX + deltaX;
                 const newOffsetY = dragStartRef.current.offsetY + deltaY;
 
-                // キャッシュされた要素位置を使用（DOM計測回避）
-                // ただしスクロール量は現在の値を使用
-                const scrollDeltaX = window.scrollX - cache.scrollX;
-                const scrollDeltaY = window.scrollY - cache.scrollY;
-                const rect = {
-                    right: cache.elementRect.right + scrollDeltaX,
-                    left: cache.elementRect.left + scrollDeltaX,
-                    bottom: cache.elementRect.bottom + scrollDeltaY,
-                    top: cache.elementRect.top + scrollDeltaY,
-                };
+                const rect = triggerElement.getBoundingClientRect();
 
-                let newX = rect.right + newOffsetX + window.scrollX;
-                let newY = rect.bottom + newOffsetY + window.scrollY;
+                let newX = rect.right + newOffsetX;
+                let newY = rect.bottom + newOffsetY;
 
-                // 画面外調整（キャッシュされたサイズを使用）
                 const { overlayWidth, overlayHeight } = cache;
 
-                if (newX + overlayWidth > window.innerWidth + window.scrollX) {
-                    newX = rect.left - overlayWidth - Math.abs(newOffsetX) + window.scrollX;
+                if (newX + overlayWidth > window.innerWidth) {
+                    newX = rect.left - overlayWidth - Math.abs(newOffsetX);
                 }
-                if (newY + overlayHeight > window.innerHeight + window.scrollY) {
-                    newY = rect.top - overlayHeight - Math.abs(newOffsetY) + window.scrollY;
+                if (newY + overlayHeight > window.innerHeight) {
+                    newY = rect.top - overlayHeight - Math.abs(newOffsetY);
                 }
 
                 newX = Math.max(0, newX);
@@ -409,8 +399,8 @@ function ActivationOverlayComponent({
 
             // オフセットを保存（最新の要素位置を取得）
             const rect = triggerElement.getBoundingClientRect();
-            const currentOffsetX = currentX - window.scrollX - rect.right;
-            const currentOffsetY = currentY - window.scrollY - rect.bottom;
+            const currentOffsetX = currentX - rect.right;
+            const currentOffsetY = currentY - rect.bottom;
 
             if (memo.activation) {
                 const updatedMemo: Memo = {
@@ -537,11 +527,12 @@ function ActivationOverlayComponent({
                 data-memo-id={memo.id}
                 className="pageminder-activation-overlay"
                 style={{
-                    position: isNearElement ? 'absolute' : 'fixed',
+                    position: 'fixed',
                     left: `${position.x}px`,
                     top: `${position.y}px`,
                     zIndex: 2147483645,
                     cursor: isNearElement ? (isDragging ? 'grabbing' : 'grab') : 'default',
+                    display: (!isTriggerVisible || isHiddenByVisibility) ? 'none' : '',
                 }}
                 onMouseDown={isNearElement ? handleMouseDown : undefined}
                 onMouseEnter={() => onPauseActivation('hover-on-memo')}
