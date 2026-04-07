@@ -27,9 +27,16 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
     const textarea = textareaRef.current;
     if (!textarea) return;
 
+    const parent = textarea.parentElement;
+    const savedScrollTop = parent?.scrollTop ?? 0;
+
     // 一度高さをリセットしてからscrollHeightを取得
     textarea.style.height = 'auto';
     textarea.style.height = `${textarea.scrollHeight}px`;
+
+    if (parent) {
+      parent.scrollTop = savedScrollTop;
+    }
   }, []);
 
   // 初期フォーカス＆カーソルを末尾に＆高さ調整
@@ -47,8 +54,11 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
     adjustHeight();
   };
 
+  const [isComposing, setIsComposing] = useState(false);
+
   // Escapeキーでキャンセル、Ctrl+Enterで保存
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (isComposing) return;
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       onSave(value);
@@ -56,11 +66,13 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
       e.preventDefault();
       onCancel();
     }
-  }, [value, onSave, onCancel]);
+  }, [value, onSave, onCancel, isComposing]);
 
   useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    const el = textareaRef.current;
+    if (!el) return;
+    el.addEventListener('keydown', handleKeyDown);
+    return () => el.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
   return (
@@ -68,6 +80,10 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
       ref={textareaRef}
       value={value}
       onChange={handleChange}
+      onKeyDown={(e) => e.stopPropagation()}
+      onKeyUp={(e) => e.stopPropagation()}
+      onCompositionStart={() => setIsComposing(true)}
+      onCompositionEnd={() => setIsComposing(false)}
       style={{
         width: '100%',
         minHeight: '100%',  // 最低でも親要素の高さを確保
