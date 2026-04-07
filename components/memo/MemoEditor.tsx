@@ -54,7 +54,12 @@ class LinkChipWidget extends WidgetType {
   }
 
   ignoreEvent(event: Event): boolean {
-    return event.type === 'mousedown' || event.type === 'click';
+    // Ctrl+click はウィジェット側で処理（CodeMirrorにカーソル移動させない）
+    if (event instanceof MouseEvent && (event.ctrlKey || event.metaKey)) {
+      return true;
+    }
+    // 通常クリックはCodeMirrorに処理させてチップを解除し編集モードに入る
+    return false;
   }
 }
 
@@ -167,15 +172,9 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
         event.stopPropagation();
         return false;
       },
-      wheel(event, view) {
-        // ホイールイベントをエディタ外に伝播（親コンテナのスクロールも機能させる）
-        const scroller = view.scrollDOM;
-        const atTop = scroller.scrollTop === 0 && event.deltaY < 0;
-        const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight && event.deltaY > 0;
-        if (atTop || atBottom) {
-          event.stopPropagation();
-          return false;
-        }
+      wheel(event) {
+        // エディタにフォーカスがあるときはページのスクロールをブロック
+        event.stopPropagation();
         return false;
       },
     });
@@ -220,16 +219,8 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
       return true;
     }
 
+    // カスタムキーマップをdefaultKeymapより先に置くことで優先処理させる
     const keymaps = keymap.of([
-      ...defaultKeymap,
-      ...historyKeymap,
-      { key: 'Mod-b', run: (v) => wrapSelection(v, '**', '**') },
-      { key: 'Mod-i', run: (v) => wrapSelection(v, '*', '*') },
-      { key: 'Mod-`', run: (v) => wrapSelection(v, '`', '`') },
-      { key: 'Mod-Shift-x', run: (v) => wrapSelection(v, '~~', '~~') },
-      { key: 'Mod-Shift-7', run: (v) => wrapLine(v, '1. ') },
-      { key: 'Mod-Shift-8', run: (v) => wrapLine(v, '- ') },
-      { key: 'Mod-Shift-9', run: (v) => wrapLine(v, '> ') },
       {
         key: 'Mod-Enter',
         run: (view) => {
@@ -251,6 +242,15 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
           return true;
         },
       },
+      { key: 'Mod-b', run: (v) => wrapSelection(v, '**', '**') },
+      { key: 'Mod-i', run: (v) => wrapSelection(v, '*', '*') },
+      { key: 'Mod-`', run: (v) => wrapSelection(v, '`', '`') },
+      { key: 'Mod-Shift-x', run: (v) => wrapSelection(v, '~~', '~~') },
+      { key: 'Mod-Shift-7', run: (v) => wrapLine(v, '1. ') },
+      { key: 'Mod-Shift-8', run: (v) => wrapLine(v, '- ') },
+      { key: 'Mod-Shift-9', run: (v) => wrapLine(v, '> ') },
+      ...defaultKeymap,
+      ...historyKeymap,
     ]);
 
     const state = EditorState.create({
