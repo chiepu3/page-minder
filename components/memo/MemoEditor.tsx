@@ -25,7 +25,7 @@ class LinkChipWidget extends WidgetType {
   toDOM() {
     const span = document.createElement('span');
     span.className = 'cm-link-chip';
-    span.textContent = `\uD83D\uDCCC ${this.text}`;
+    span.textContent = this.text;
     span.title = this.url;
     span.style.cssText = [
       'display: inline-block',
@@ -43,9 +43,11 @@ class LinkChipWidget extends WidgetType {
     ].join(';');
 
     span.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      window.open(this.url, '_blank', 'noopener');
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        window.open(this.url, '_blank', 'noopener');
+      }
     });
 
     return span;
@@ -101,7 +103,7 @@ const baseTheme = EditorView.theme({
   },
   '.cm-scroller': {
     fontFamily: 'inherit',
-    overflow: 'hidden',
+    overflow: 'auto',
     lineHeight: '1.5',
   },
   '.cm-content': {
@@ -109,6 +111,9 @@ const baseTheme = EditorView.theme({
     caretColor: 'inherit',
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
+  },
+  '.cm-line': {
+    padding: '0',
   },
   '.cm-focused': {
     outline: 'none',
@@ -162,6 +167,17 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
         event.stopPropagation();
         return false;
       },
+      wheel(event, view) {
+        // ホイールイベントをエディタ外に伝播（親コンテナのスクロールも機能させる）
+        const scroller = view.scrollDOM;
+        const atTop = scroller.scrollTop === 0 && event.deltaY < 0;
+        const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight && event.deltaY > 0;
+        if (atTop || atBottom) {
+          event.stopPropagation();
+          return false;
+        }
+        return false;
+      },
     });
   }, []);
 
@@ -175,6 +191,13 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
       ...historyKeymap,
       {
         key: 'Mod-Enter',
+        run: (view) => {
+          onSaveRef.current(view.state.doc.toString());
+          return true;
+        },
+      },
+      {
+        key: 'Shift-Enter',
         run: (view) => {
           onSaveRef.current(view.state.doc.toString());
           return true;
