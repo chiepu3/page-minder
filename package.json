@@ -2,21 +2,19 @@
   "name": "page-minder",
   "description": "業務メモを画面上に表示するChrome拡張機能",
   "private": true,
-  "version": "0.9.3",
+  "version": "0.9.4",
   "type": "module",
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
-    "prebuild": "node scripts/bump-build.js",
     "build": "wxt build",
-    "build:noversion": "wxt build",
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
-    "postinstall": "wxt prepare"
+    "postinstall": "wxt prepare && git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@botanicastudios/element-selector": "^0.1.10",
