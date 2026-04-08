@@ -383,8 +383,6 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
           display: 'flex',
           flexDirection: 'column',
           border: `1px solid ${theme.border}33`,
-          // アニメーション終了後にtransformをリセット
-          transform: animationState === 'idle' ? 'none' : undefined,
         }}
       >
         {/* ドラッグハンドル（タイトルバー） */}
