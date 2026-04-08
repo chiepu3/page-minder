@@ -1,0 +1,4 @@
+#!/bin/sh
+# コミットごとにパッチバージョンを自動インクリメント
+node scripts/bump-build.js
+git add package.json

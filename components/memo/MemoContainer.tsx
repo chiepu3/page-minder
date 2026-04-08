@@ -28,15 +28,37 @@ export function MemoContainer() {
 
   // アクティブ化状態管理
   const [activatedMemos, setActivatedMemos] = useState<Map<string, Element>>(new Map());
+  const [hiddenByVisibility, setHiddenByVisibility] = useState<Set<string>>(new Set());
 
   const { deactivateMemo, pauseDeactivation, resumeDeactivation } = useActivation(memos, {
     onActivate: (memoId, triggerElement) => {
       setActivatedMemos(prev => new Map(prev).set(memoId, triggerElement));
+      setHiddenByVisibility(prev => {
+        const next = new Set(prev);
+        next.delete(memoId);
+        return next;
+      });
     },
     onDeactivate: (memoId) => {
       setActivatedMemos(prev => {
         const next = new Map(prev);
         next.delete(memoId);
+        return next;
+      });
+      setHiddenByVisibility(prev => {
+        const next = new Set(prev);
+        next.delete(memoId);
+        return next;
+      });
+    },
+    onVisibilityChange: (memoId, visible) => {
+      setHiddenByVisibility(prev => {
+        const next = new Set(prev);
+        if (visible) {
+          next.delete(memoId);
+        } else {
+          next.add(memoId);
+        }
         return next;
       });
     },
@@ -327,7 +349,9 @@ export function MemoContainer() {
       })}
 
       {/* アクティブ化されたメモのオーバーレイ表示 */}
-      {Array.from(activatedMemos.entries()).map(([memoId, triggerElement]) => {
+      {Array.from(activatedMemos.entries())
+        .filter(([memoId]) => !hiddenByVisibility.has(memoId))
+        .map(([memoId, triggerElement]) => {
         const memo = memos.find(m => m.id === memoId);
         if (!memo) return null;
         return (
