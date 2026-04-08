@@ -1,5 +1,5 @@
 // =============================================================================
-// PageMinder - useActivation Hook (with MutationObserver for dynamic DOM)
+// PageMinder - useActivation Hook (with MutationObserver & IntersectionObserver)
 // =============================================================================
 
 import { useEffect, useRef, useCallback, useMemo } from 'react';
@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger';
 interface UseActivationOptions {
     onActivate: (memoId: string, triggerElement: Element) => void;
     onDeactivate: (memoId: string) => void;
-    onVisibilityChange?: (memoId: string, visible: boolean) => void;
+    onTriggerVisibilityChange?: (memoId: string, visible: boolean) => void;
     settings: GlobalSettings;
 }
 
@@ -31,14 +31,15 @@ export function useActivation(
     const cleanupFunctionsRef = useRef<Array<() => void>>([]);
     const graceTimeoutIdsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-    const intersectionObserverRef = useRef<IntersectionObserver | null>(null);
-    const observedElementsRef = useRef<Map<Element, string>>(new Map());
-
     // MutationObserver用のref
     const observerRef = useRef<MutationObserver | null>(null);
     const rescanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // 既にイベントリスナーを設定した要素を追跡（重複登録防止）
     const registeredElementsRef = useRef<WeakSet<Element>>(new WeakSet());
+
+    // IntersectionObserverでトリガー要素の可視性を監視
+    const intersectionObserverRef = useRef<IntersectionObserver | null>(null);
+    const triggerVisibilityMapRef = useRef<Map<string, boolean>>(new Map());
 
     // パフォーマンス最適化: セレクタ→メモのマッピングをキャッシュ
     const selectorMemoMapRef = useRef<Map<string, Memo[]> | null>(null);
@@ -121,16 +122,18 @@ export function useActivation(
     }
 
     function deactivateMemoInternal(memoId: string) {
+        // 一時停止中なら何もしない
         if (pausedStatesRef.current.has(memoId)) {
             logger.debug('Deactivation skipped (paused)', { memoId });
             return;
         }
 
+        // IntersectionObserverから要素を解除
         const state = activeStatesRef.current.get(memoId);
         if (state && intersectionObserverRef.current) {
             intersectionObserverRef.current.unobserve(state.triggerElement);
-            observedElementsRef.current.delete(state.triggerElement);
         }
+        triggerVisibilityMapRef.current.delete(memoId);
 
         clearMemoTimeout(memoId);
         activeStatesRef.current.delete(memoId);
@@ -155,10 +158,10 @@ export function useActivation(
         logger.debug('Memo activated', { memoId: memo.id, trigger: config.trigger });
         optionsRef.current.onActivate(memo.id, triggerElement);
 
-        // IntersectionObserverでトリガー要素の可視性を監視
-        if (intersectionObserverRef.current && !observedElementsRef.current.has(triggerElement)) {
-            observedElementsRef.current.set(triggerElement, memo.id);
+        // IntersectionObserverにトリガー要素を登録
+        if (intersectionObserverRef.current) {
             intersectionObserverRef.current.observe(triggerElement);
+            triggerVisibilityMapRef.current.set(memo.id, true);
         }
 
         // 非表示条件の設定
@@ -422,28 +425,35 @@ export function useActivation(
             observerRef.current.disconnect();
             observerRef.current = null;
         }
-        if (rescanTimeoutRef.current) {
-            clearTimeout(rescanTimeoutRef.current);
-            rescanTimeoutRef.current = null;
-        }
 
-        // 2.5. IntersectionObserverを初期化
+        // 2.5 IntersectionObserverを初期化
         if (intersectionObserverRef.current) {
             intersectionObserverRef.current.disconnect();
         }
-        observedElementsRef.current.clear();
+        triggerVisibilityMapRef.current.clear();
         intersectionObserverRef.current = new IntersectionObserver(
             (entries) => {
                 for (const entry of entries) {
-                    const memoId = observedElementsRef.current.get(entry.target);
-                    if (memoId) {
-                        const isVisible = entry.isIntersecting;
-                        optionsRef.current.onVisibilityChange?.(memoId, isVisible);
+                    const element = entry.target;
+                    for (const [memoId, state] of activeStatesRef.current) {
+                        if (state.triggerElement === element) {
+                            const wasVisible = triggerVisibilityMapRef.current.get(memoId) ?? true;
+                            const isVisible = entry.isIntersecting;
+                            if (wasVisible !== isVisible) {
+                                triggerVisibilityMapRef.current.set(memoId, isVisible);
+                                optionsRef.current.onTriggerVisibilityChange?.(memoId, isVisible);
+                                logger.debug('Trigger element visibility changed', { memoId, isVisible });
+                            }
+                        }
                     }
                 }
             },
             { threshold: 0 }
         );
+        if (rescanTimeoutRef.current) {
+            clearTimeout(rescanTimeoutRef.current);
+            rescanTimeoutRef.current = null;
+        }
 
         // 3. アクティブ化が有効なメモをフィルタ
         const activatableMemos = memos.filter(
@@ -537,9 +547,8 @@ export function useActivation(
 
             if (intersectionObserverRef.current) {
                 intersectionObserverRef.current.disconnect();
-                intersectionObserverRef.current = null;
             }
-            observedElementsRef.current.clear();
+            triggerVisibilityMapRef.current.clear();
 
             // セレクタマップをクリア
             selectorMemoMapRef.current = null;

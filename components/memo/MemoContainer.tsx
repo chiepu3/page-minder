@@ -51,7 +51,7 @@ export function MemoContainer() {
         return next;
       });
     },
-    onVisibilityChange: (memoId, visible) => {
+    onTriggerVisibilityChange: (memoId, visible) => {
       setHiddenByVisibility(prev => {
         const next = new Set(prev);
         if (visible) {
@@ -366,6 +366,7 @@ export function MemoContainer() {
             onPauseActivation={(reason) => pauseDeactivation(memo.id, reason)}
             onResumeActivation={(reason) => resumeDeactivation(memo.id, reason)}
             onClose={() => deactivateMemo(memoId)}
+            isHiddenByVisibility={hiddenByVisibility.has(memoId)}
           />
         );
       })}

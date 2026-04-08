@@ -315,68 +315,30 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
   };
 
   if (memo.minimized) {
-    if (isActivated) {
-      return (
-        <div
-          ref={containerRef}
-          className={getAnimationClass()}
-          style={{
-            ...baseStyle,
-            position: 'relative',
-            width: `${MINIMIZED_SIZE.width + 16}px`,
-            height: `${MINIMIZED_SIZE.height + 16}px`,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-          onClick={toggleMinimize}
-          title={memo.title ?? 'メモ'}
-        >
-          <div
-            style={{
-              width: `${MINIMIZED_SIZE.width}px`,
-              height: `${MINIMIZED_SIZE.height}px`,
-              backgroundColor: memoBgColor,
-              borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'transform 0.15s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
-            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-          >
-            <IconStickyNote size={18} color={memoTextColor} />
-          </div>
-        </div>
-      );
-    }
+    const isActivationMinimized = isActivated && isNearElementMode;
+
     return (
       <div
         ref={containerRef}
         className={getAnimationClass()}
         style={{
           ...baseStyle,
-          position: 'fixed',
-          left: `${dragPosition.x - 8}px`,  // ヒットエリアのパディングを考慮
-          top: `${dragPosition.y - 8}px`,
-          width: `${MINIMIZED_SIZE.width + 16}px`,  // 左右8pxずつ透明パディング
+          position: isActivationMinimized ? 'relative' : 'fixed',
+          left: isActivationMinimized ? undefined : `${dragPosition.x - 8}px`,
+          top: isActivationMinimized ? undefined : `${dragPosition.y - 8}px`,
+          width: `${MINIMIZED_SIZE.width + 16}px`,
           height: `${MINIMIZED_SIZE.height + 16}px`,
           zIndex: 999999,
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          // 透明エリアはクリックを通さない（ドラッグ中以外）
           pointerEvents: isDragging ? 'auto' : 'auto',
         }}
         onClick={toggleMinimize}
-        onMouseDown={handleDragStart}
+        onMouseDown={isActivationMinimized ? undefined : handleDragStart}
         title={memo.title ?? 'メモ'}
       >
-        {/* 実際の見た目のアイコン部分 */}
         <div
           style={{
             width: `${MINIMIZED_SIZE.width}px`,

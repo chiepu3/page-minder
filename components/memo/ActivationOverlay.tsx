@@ -12,11 +12,12 @@ interface ActivationOverlayProps {
     triggerElement: Element;
     settings: GlobalSettings;
     onUpdate: (memo: Memo) => void;
-    onDelete: (memoId: string) => void; // データの削除
-    onClose: () => void; // 非表示（アクティブ化解除）
+    onDelete: (memoId: string) => void;
+    onClose: () => void;
     onStartElementPicker: (memoId: string) => void;
     onPauseActivation: (reason: string) => void;
     onResumeActivation: (reason: string) => void;
+    isHiddenByVisibility?: boolean;
 }
 
 interface RulerInfo {
@@ -44,8 +45,6 @@ interface DragCache {
     elementRect: DOMRect;
     overlayWidth: number;
     overlayHeight: number;
-    scrollX: number;
-    scrollY: number;
 }
 
 /**
@@ -62,11 +61,12 @@ function ActivationOverlayComponent({
     onStartElementPicker,
     onPauseActivation,
     onResumeActivation,
+    isHiddenByVisibility = false,
 }: ActivationOverlayProps) {
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const [ruler, setRuler] = useState<RulerInfo>({ visible: false });
-    const [isElementInViewport, setIsElementInViewport] = useState(true);
+    const [isTriggerVisible, setIsTriggerVisible] = useState(true);
     const overlayRef = useRef<HTMLDivElement>(null);
     const dragStartRef = useRef({ mouseX: 0, mouseY: 0, offsetX: 0, offsetY: 0 });
     const config = memo.activation;
@@ -108,6 +108,7 @@ function ActivationOverlayComponent({
     }, [triggerElement]);
 
     // 表示位置を計算（キャッシュされたサイズを使用）
+    // position: fixed + viewport座標で統一（transform/zoomの影響を回避）
     const calculatePosition = useCallback(() => {
         if (!config) return { x: 0, y: 0 };
 
@@ -116,8 +117,6 @@ function ActivationOverlayComponent({
             const offsetX = config.offsetX ?? 10;
             const offsetY = config.offsetY ?? 10;
 
-            // position: fixed + viewport座標（scrollX/Y なし）
-            // getBoundingClientRect()は既にviewport座標を返す
             let x = rect.right + offsetX;
             let y = rect.bottom + offsetY;
 
@@ -157,10 +156,11 @@ function ActivationOverlayComponent({
         const overlayWidth = cachedOverlayWidth ?? overlaySize.current.width;
         const overlayHeight = cachedOverlayHeight ?? overlaySize.current.height;
 
-        // position: fixed なので memoX/Y は既にviewport座標
+        // メモの中心座標（viewport座標）
         const memoCenterX = memoX + overlayWidth / 2;
         const memoCenterY = memoY + overlayHeight / 2;
 
+        // メモが要素の右にあるか左にあるか
         const isRight = memoX >= rect.right;
         const isLeft = memoX + overlayWidth <= rect.left;
         const isBelow = memoY >= rect.bottom;
@@ -169,6 +169,7 @@ function ActivationOverlayComponent({
         let horizontalLine: RulerInfo['horizontalLine'];
         let verticalLine: RulerInfo['verticalLine'];
 
+        // 水平方向のルーラー
         if (isRight) {
             const distance = memoX - rect.right;
             horizontalLine = {
@@ -189,6 +190,7 @@ function ActivationOverlayComponent({
             };
         }
 
+        // 垂直方向のルーラー
         if (isBelow) {
             const distance = memoY - rect.bottom;
             verticalLine = {
@@ -277,13 +279,9 @@ function ActivationOverlayComponent({
             pending = true;
             rafId = requestAnimationFrame(() => {
                 if (config?.positionMode === 'near-element') {
-                    const rect = getElementRect();
-                    const outOfViewport = rect.bottom < 0 || rect.top > window.innerHeight || rect.right < 0 || rect.left > window.innerWidth;
-                    setIsElementInViewport(!outOfViewport);
-                    if (outOfViewport) {
-                        pending = false;
-                        return;
-                    }
+                    const rect = triggerElement.getBoundingClientRect();
+                    const isVisible = !(rect.bottom < 0 || rect.top > window.innerHeight || rect.right < 0 || rect.left > window.innerWidth);
+                    setIsTriggerVisible(isVisible);
                 }
                 const pos = calculatePosition();
                 setPosition(pos);
@@ -299,7 +297,7 @@ function ActivationOverlayComponent({
             window.removeEventListener('resize', handleUpdate);
             if (rafId !== null) cancelAnimationFrame(rafId);
         };
-    }, [isDragging, calculatePosition, config, getElementRect]);
+    }, [isDragging, calculatePosition, config, triggerElement]);
 
     // ドラッグ開始
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -314,8 +312,6 @@ function ActivationOverlayComponent({
             elementRect: triggerElement.getBoundingClientRect(),
             overlayWidth: overlaySize.current.width,
             overlayHeight: overlaySize.current.height,
-            scrollX: window.scrollX,
-            scrollY: window.scrollY,
         };
 
         dragStartRef.current = {
@@ -353,16 +349,7 @@ function ActivationOverlayComponent({
                 const newOffsetX = dragStartRef.current.offsetX + deltaX;
                 const newOffsetY = dragStartRef.current.offsetY + deltaY;
 
-                // position: fixed: viewport座標系
-                // スクロールで要素のviewport位置が変化するため補正
-                const scrollDeltaX = window.scrollX - cache.scrollX;
-                const scrollDeltaY = window.scrollY - cache.scrollY;
-                const rect = {
-                    right: cache.elementRect.right - scrollDeltaX,
-                    left: cache.elementRect.left - scrollDeltaX,
-                    bottom: cache.elementRect.bottom - scrollDeltaY,
-                    top: cache.elementRect.top - scrollDeltaY,
-                };
+                const rect = triggerElement.getBoundingClientRect();
 
                 let newX = rect.right + newOffsetX;
                 let newY = rect.bottom + newOffsetY;
@@ -410,7 +397,7 @@ function ActivationOverlayComponent({
             // キャッシュをクリア
             dragCache.current = null;
 
-            // オフセットを保存（viewport座標系）
+            // オフセットを保存（最新の要素位置を取得）
             const rect = triggerElement.getBoundingClientRect();
             const currentOffsetX = currentX - rect.right;
             const currentOffsetY = currentY - rect.bottom;
@@ -545,7 +532,7 @@ function ActivationOverlayComponent({
                     top: `${position.y}px`,
                     zIndex: 2147483645,
                     cursor: isNearElement ? (isDragging ? 'grabbing' : 'grab') : 'default',
-                    display: isElementInViewport ? undefined : 'none',
+                    display: (!isTriggerVisible || isHiddenByVisibility) ? 'none' : '',
                 }}
                 onMouseDown={isNearElement ? handleMouseDown : undefined}
                 onMouseEnter={() => onPauseActivation('hover-on-memo')}
