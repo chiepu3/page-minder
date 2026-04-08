@@ -227,7 +227,7 @@
 /* 水平線 */
 [data-memo-id] hr {
     border: none;
-    border-top: 1px solid rgba(0, 0, 0, 0.15);
+    border-top: 2px solid rgba(0, 0, 0, 0.25);
     margin: 0.8em 0;
 }
 
@@ -236,13 +236,17 @@
     margin: 0.4em 0;
 }
 
-/* 太字・斜体 */
+/* 太字・斜体・取り消し線 */
 [data-memo-id] strong {
     font-weight: 700;
 }
 
 [data-memo-id] em {
     font-style: italic;
+}
+
+[data-memo-id] del {
+    text-decoration: line-through;
 }
 
 /* 画像 */
