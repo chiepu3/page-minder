@@ -3,7 +3,7 @@ import { EditorView, keymap, Decoration, ViewPlugin, ViewUpdate, WidgetType } fr
 import { EditorState, EditorSelection, Range } from '@codemirror/state';
 import { markdown } from '@codemirror/lang-markdown';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { syntaxHighlighting, defaultHighlightStyle, indentOnInput, bracketMatching, HighlightStyle } from '@codemirror/language';
+import { syntaxHighlighting, HighlightStyle, indentOnInput, bracketMatching } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { oneDark } from '@codemirror/theme-one-dark';
 import type { GlobalSettings } from '@/types';
@@ -152,8 +152,22 @@ const darkTheme = EditorView.theme({
   },
 });
 
-const strikethroughStyle = HighlightStyle.define([
+// defaultHighlightStyle の全ルールに取り消し線を追加した統合スタイル
+// （2つに分けると Shadow DOM 内でのCSS注入順により干渉が起きる）
+const markdownHighlightStyle = HighlightStyle.define([
+  { tag: tags.heading1, fontWeight: 'bold', fontSize: '1.4em' },
+  { tag: tags.heading2, fontWeight: 'bold', fontSize: '1.2em' },
+  { tag: tags.heading3, fontWeight: 'bold', fontSize: '1.1em' },
+  { tag: tags.heading4, fontWeight: 'bold' },
+  { tag: tags.heading5, fontWeight: 'bold' },
+  { tag: tags.heading6, fontWeight: 'bold' },
+  { tag: tags.strong, fontWeight: 'bold' },
+  { tag: tags.emphasis, fontStyle: 'italic' },
   { tag: tags.strikethrough, textDecoration: 'line-through' },
+  { tag: tags.link, textDecoration: 'underline' },
+  { tag: tags.url, textDecoration: 'underline' },
+  { tag: tags.monospace, fontFamily: 'monospace' },
+  { tag: tags.content, opacity: '1' },
 ]);
 
 export function MemoEditor({ content, settings, onSave, onCancel, onChange }: MemoEditorProps) {
@@ -283,8 +297,7 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
         keymaps,
         history(),
         markdown(),
-        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-        syntaxHighlighting(strikethroughStyle),
+        syntaxHighlighting(markdownHighlightStyle),
         baseTheme,
         isDarkMode ? oneDark : [],
         isDarkMode ? darkTheme : [],
