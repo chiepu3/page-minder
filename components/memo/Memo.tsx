@@ -393,13 +393,13 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             justifyContent: 'space-between',
             padding: '8px 12px',
             backgroundColor: 'rgba(0,0,0,0.08)',
-            // 周辺モードではドラッグ不可なのでカーソル変更
             cursor: isNearElementMode ? 'default' : 'move',
             userSelect: 'none',
+            minWidth: 0,
           }}
           onMouseDown={isNearElementMode ? undefined : handleDragStart}
         >
-          <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontSize: '12px' }}>
+          <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0, fontSize: '12px' }}>
             {memo.title ?? 'メモ'}
           </span>
           <button
@@ -412,6 +412,7 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              flexShrink: 0,
             }}
             onClick={toggleMinimize}
             onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
