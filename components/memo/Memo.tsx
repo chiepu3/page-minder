@@ -114,6 +114,11 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
     const imgElements = el.querySelectorAll('img[data-memo-img]');
     if (imgElements.length === 0) return;
 
+    // 前回のObject URLを解放
+    const urls = objectUrlsRef.current;
+    urls.forEach((u) => URL.revokeObjectURL(u));
+    urls.length = 0;
+
     let cancelled = false;
     const loadImages = async () => {
       for (const img of imgElements) {

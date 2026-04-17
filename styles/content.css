@@ -261,6 +261,11 @@
     margin: 4px 0;
     cursor: zoom-in;
     display: block;
+    pointer-events: auto;
+}
+
+[data-memo-id] a {
+    pointer-events: auto;
 }
 
 [data-memo-id] img[data-memo-img][data-loading="true"] {
