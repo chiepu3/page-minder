@@ -12,6 +12,8 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { useDraggable } from '@/hooks/useDraggable';
 import { useResizable } from '@/hooks/useResizable';
 import { IconStickyNote, IconMinimize } from '@/components/icons';
+import { getImage } from '@/lib/image-storage';
+import { MEMO_IMG_PROTOCOL } from '@/lib/constants';
 import {
   DEFAULT_MEMO_SIZE,
   MINIMIZED_SIZE,
@@ -53,8 +55,11 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
   // アニメーション状態: enter=出現, idle=通常, shrink=最小化中, expand=展開中, exit=削除中
   const [animationState, setAnimationState] = useState<'enter' | 'idle' | 'shrink' | 'expand' | 'exit'>('enter');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const contentAreaRef = useRef<HTMLDivElement>(null);
   const prevMinimizedRef = useRef(memo.minimized);
+  const objectUrlsRef = useRef<string[]>([]);
 
   // markedのカスタムレンダラー: リンクを新しいタブで開く
   const customRenderer = useMemo(() => {
@@ -62,6 +67,15 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
     renderer.link = ({ href, title, text }) => {
       const titleAttr = title ? ` title="${title}"` : '';
       return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+    };
+    renderer.image = ({ href, title, text }) => {
+      if (href && href.startsWith(MEMO_IMG_PROTOCOL)) {
+        const id = href.slice(MEMO_IMG_PROTOCOL.length);
+        const titleAttr = title ? ` title="${title}"` : '';
+        return `<img data-memo-img="${id}"${titleAttr} alt="${text}" data-loading="true" />`;
+      }
+      const titleAttr = title ? ` title="${title}"` : '';
+      return `<img src="${href}"${titleAttr} alt="${text}" style="max-width:100%;border-radius:4px;" />`;
     };
     return renderer;
   }, []);
@@ -92,6 +106,50 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
       setIsSettingsOpen(true);
     }
   }, [shouldOpenSettings]);
+
+  // IndexedDBから画像を読み込んでObject URLをセット
+  useEffect(() => {
+    if (isEditing || !contentAreaRef.current) return;
+    const el = contentAreaRef.current;
+    const imgElements = el.querySelectorAll('img[data-memo-img]');
+    if (imgElements.length === 0) return;
+
+    let cancelled = false;
+    const loadImages = async () => {
+      for (const img of imgElements) {
+        if (cancelled) break;
+        const id = img.getAttribute('data-memo-img');
+        if (!id) continue;
+        const blob = await getImage(id);
+        if (cancelled || !blob) continue;
+        const url = URL.createObjectURL(blob);
+        objectUrlsRef.current.push(url);
+        img.setAttribute('src', url);
+        img.removeAttribute('data-loading');
+      }
+    };
+    loadImages();
+    return () => { cancelled = true; };
+  }, [parsedContent, isEditing]);
+
+  // Object URLのクリーンアップ
+  useEffect(() => {
+    const urls = objectUrlsRef.current;
+    return () => {
+      urls.forEach((u) => URL.revokeObjectURL(u));
+      urls.length = 0;
+    };
+  }, []);
+
+  // ライトボックス: ESCキーで閉じる
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxSrc(null);
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [lightboxSrc]);
 
 
 
@@ -459,6 +517,7 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             </div>
           ) : (
             <div
+              ref={contentAreaRef}
               data-memo-id={memo.id}
               style={{ 
                 flex: 1,
@@ -466,8 +525,16 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
                 overflow: 'auto',
               }}
               onClick={(e) => {
-                // リンククリック処理
                 const target = e.target as HTMLElement;
+                // 画像クリック → ライトボックス
+                if (target.tagName === 'IMG' && target.hasAttribute('data-memo-img')) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const src = (target as HTMLImageElement).src;
+                  if (src) setLightboxSrc(src);
+                  return;
+                }
+                // リンククリック処理
                 if (target.tagName === 'A') {
                   e.preventDefault();
                   e.stopPropagation();
@@ -567,6 +634,16 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
           onCancel={() => setIsDeleteDialogOpen(false)}
           isDanger={true}
         />
+      )}
+
+      {/* ライトボックス */}
+      {lightboxSrc && (
+        <div
+          className="pageminder-lightbox"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <img src={lightboxSrc} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px' }} />
+        </div>
       )}
     </>
   );

@@ -7,6 +7,9 @@ import { syntaxHighlighting, HighlightStyle, indentOnInput, bracketMatching } fr
 import { tags } from '@lezer/highlight';
 import { oneDark } from '@codemirror/theme-one-dark';
 import type { GlobalSettings } from '@/types';
+import { resizeAndConvertToWebP, isImageFile, validateImageSize } from '@/lib/image-utils';
+import { saveImage } from '@/lib/image-storage';
+import { MEMO_IMG_PROTOCOL } from '@/lib/constants';
 
 interface MemoEditorProps {
   content: string;
@@ -17,6 +20,23 @@ interface MemoEditorProps {
 }
 
 const LINK_REGEX = /\[([^\]]*)\]\(([^)]*)\)/g;
+
+async function insertImageFile(file: File, view: EditorView) {
+  if (!isImageFile(file)) return;
+  if (!validateImageSize(file)) return;
+  try {
+    const webpBlob = await resizeAndConvertToWebP(file);
+    const id = await saveImage(webpBlob, 'image/webp');
+    const insert = `\n![](${MEMO_IMG_PROTOCOL}${id})\n`;
+    const pos = view.state.selection.main.head;
+    view.dispatch({
+      changes: { from: pos, insert },
+      selection: EditorSelection.cursor(pos + insert.length),
+    });
+  } catch (e) {
+    console.error('Failed to insert image:', e);
+  }
+}
 
 class LinkChipWidget extends WidgetType {
   constructor(readonly text: string, readonly url: string, readonly isDark: boolean) {
@@ -196,6 +216,20 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
         return false;
       },
       paste(event, view) {
+        const items = event.clipboardData?.items;
+        if (items) {
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.type.startsWith('image/')) {
+              event.preventDefault();
+              const file = item.getAsFile();
+              if (file) {
+                insertImageFile(file, view);
+              }
+              return true;
+            }
+          }
+        }
         const clipboardText = event.clipboardData?.getData('text/plain') ?? '';
         if (!/^https?:\/\//.test(clipboardText)) return false;
         event.preventDefault();
@@ -215,6 +249,20 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
           });
         }
         return true;
+      },
+      drop(event, view) {
+        const files = event.dataTransfer?.files;
+        if (files && files.length > 0) {
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            if (isImageFile(file)) {
+              event.preventDefault();
+              insertImageFile(file, view);
+              return true;
+            }
+          }
+        }
+        return false;
       },
     });
   }, []);

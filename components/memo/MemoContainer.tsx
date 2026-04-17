@@ -12,6 +12,8 @@ import { matchAnyUrlPattern } from '@/lib/url-matcher';
 import { logger } from '@/lib/logger';
 import { useUrlWatcher } from '@/hooks/useUrlWatcher';
 import { useActivation } from '@/hooks/useActivation';
+import { deleteImages } from '@/lib/image-storage';
+import { extractImageIds } from '@/lib/image-utils';
 
 import { DEFAULT_SETTINGS } from '@/lib/constants';
 
@@ -223,13 +225,6 @@ export function MemoContainer() {
     // 前のメモ状態が渡されていない場合は、現在のメモ一覧から取得
     const existingMemo = prevMemo ?? memos.find(m => m.id === updatedMemo.id);
 
-    // 重要な変更は即時保存（デバウンスしない）
-    // - 内容（content）の変更
-    // - タイトルの変更
-    // - URLパターンの変更
-    // - アクティブ化設定の変更
-    // - 色・フォントサイズの変更
-    // ※位置（position）のみの変更はドラッグ中に頻繁に発生するためデバウンス
     const isContentChange = existingMemo?.content !== updatedMemo.content;
     const isTitleChange = existingMemo?.title !== updatedMemo.title;
     const isUrlPatternChange = JSON.stringify(existingMemo?.urlPatterns) !== JSON.stringify(updatedMemo.urlPatterns);
@@ -241,6 +236,16 @@ export function MemoContainer() {
 
     const shouldSaveImmediately = isContentChange || isTitleChange || isUrlPatternChange || isActivationChange || isStyleChange;
 
+    // 孤立画像の自動削除: content変更時に使われなくなった画像を削除
+    if (isContentChange && existingMemo) {
+      const oldIds = new Set(extractImageIds(existingMemo.content ?? ''));
+      const newIds = new Set(extractImageIds(updatedMemo.content));
+      const removedIds = [...oldIds].filter((id) => !newIds.has(id));
+      if (removedIds.length > 0) {
+        deleteImages(removedIds).catch((e) => logger.error('Failed to delete orphan images', { error: String(e) }));
+      }
+    }
+
     await storage.saveMemo(updatedMemo, { immediate: shouldSaveImmediately });
     setMemos((prev) =>
       prev.map((m) => (m.id === updatedMemo.id ? updatedMemo : m))
@@ -248,9 +253,16 @@ export function MemoContainer() {
   }, [memos]);
 
   const handleMemoDelete = useCallback(async (memoId: string) => {
+    const targetMemo = memos.find(m => m.id === memoId);
+    if (targetMemo) {
+      const imageIds = extractImageIds(targetMemo.content);
+      if (imageIds.length > 0) {
+        deleteImages(imageIds).catch((e) => logger.error('Failed to delete images on memo delete', { error: String(e) }));
+      }
+    }
     await storage.deleteMemo(memoId);
     setMemos((prev) => prev.filter((m) => m.id !== memoId));
-  }, []);
+  }, [memos]);
 
   // ElementPicker起動ハンドラ
   const handleStartElementPicker = useCallback((memoId: string) => {

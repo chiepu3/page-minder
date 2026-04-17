@@ -183,6 +183,7 @@ export interface ExportData {
     version: string;                     // エクスポート形式のバージョン
     exportedAt: string;                  // ISO 8601
     data: StorageSchema;
+    images?: Array<{ id: string; data: string; mimeType: string; createdAt: string }>;
 }
 
 /**

@@ -255,6 +255,40 @@
     border-radius: 4px;
 }
 
+[data-memo-id] img[data-memo-img] {
+    max-width: 100%;
+    border-radius: 4px;
+    margin: 4px 0;
+    cursor: zoom-in;
+    display: block;
+}
+
+[data-memo-id] img[data-memo-img][data-loading="true"] {
+    min-height: 40px;
+    background: rgba(128, 128, 128, 0.15);
+}
+
+.pageminder-lightbox {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 2147483647;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+}
+
+.pageminder-lightbox img {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
 /* テーブル */
 [data-memo-id] table {
     border-collapse: collapse;

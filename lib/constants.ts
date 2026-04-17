@@ -165,3 +165,12 @@ export const STORAGE_KEYS = {
  * エクスポートデータのバージョン
  */
 export const EXPORT_VERSION = '1.0.0';
+
+// -----------------------------------------------------------------------------
+// Image Constants
+// -----------------------------------------------------------------------------
+
+export const IMAGE_MAX_WIDTH = 1024;
+export const IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024;
+export const IMAGE_ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+export const MEMO_IMG_PROTOCOL = 'memo-img://';
