@@ -59,7 +59,7 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
   const containerRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const prevMinimizedRef = useRef(memo.minimized);
-  const objectUrlsRef = useRef<string[]>([]);
+  const objectUrlsRef = useRef<Map<string, string>>(new Map());
 
   // markedのカスタムレンダラー: リンクを新しいタブで開く
   const customRenderer = useMemo(() => {
@@ -107,17 +107,34 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
     }
   }, [shouldOpenSettings]);
 
-  // IndexedDBから画像を読み込んでObject URLをセット
+  // Problem 1 fix: Object URLを画像ID単位でキャッシュし、不要なrevokeを防ぐ
+  // ReactがdangerouslySetInnerHTMLでDOMを再構築しても、既存のObject URLは有効なまま
+  // 新しい画像IDに対してのみIndexedDBから読み込み、不要になったものだけrevokeする
   useEffect(() => {
     if (isEditing || !contentAreaRef.current) return;
     const el = contentAreaRef.current;
     const imgElements = el.querySelectorAll('img[data-memo-img]');
-    if (imgElements.length === 0) return;
+    if (imgElements.length === 0) {
+      const cache = objectUrlsRef.current;
+      if (cache.size > 0) {
+        cache.forEach((u) => URL.revokeObjectURL(u));
+        cache.clear();
+      }
+      return;
+    }
 
-    // 前回のObject URLを解放
-    const urls = objectUrlsRef.current;
-    urls.forEach((u) => URL.revokeObjectURL(u));
-    urls.length = 0;
+    const currentIds = new Set<string>();
+    imgElements.forEach((img) => {
+      const id = img.getAttribute('data-memo-img');
+      if (id) currentIds.add(id);
+    });
+
+    const cache = objectUrlsRef.current;
+    const removedIds = [...cache.keys()].filter((id) => !currentIds.has(id));
+    for (const id of removedIds) {
+      URL.revokeObjectURL(cache.get(id)!);
+      cache.delete(id);
+    }
 
     let cancelled = false;
     const loadImages = async () => {
@@ -125,10 +142,15 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
         if (cancelled) break;
         const id = img.getAttribute('data-memo-img');
         if (!id) continue;
+        if (cache.has(id)) {
+          img.setAttribute('src', cache.get(id)!);
+          img.removeAttribute('data-loading');
+          continue;
+        }
         const blob = await getImage(id);
         if (cancelled || !blob) continue;
         const url = URL.createObjectURL(blob);
-        objectUrlsRef.current.push(url);
+        cache.set(id, url);
         img.setAttribute('src', url);
         img.removeAttribute('data-loading');
       }
@@ -137,12 +159,12 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
     return () => { cancelled = true; };
   }, [parsedContent, isEditing]);
 
-  // Object URLのクリーンアップ
+  // Object URLのクリーンアップ（アンマウント時）
   useEffect(() => {
-    const urls = objectUrlsRef.current;
+    const cache = objectUrlsRef.current;
     return () => {
-      urls.forEach((u) => URL.revokeObjectURL(u));
-      urls.length = 0;
+      cache.forEach((u) => URL.revokeObjectURL(u));
+      cache.clear();
     };
   }, []);
 

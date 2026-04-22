@@ -19,7 +19,9 @@ interface MemoEditorProps {
   onChange?: (content: string) => void;
 }
 
-const LINK_REGEX = /\[([^\]]*)\]\(([^)]*)\)/g;
+// [text](url) にマッチするが、![alt](path)（画像構文）は除外する
+// 先頭の [ の直前が ! でない場合のみマッチ → 画像リンクをチップ化しない
+const LINK_REGEX = /(?<!!)\[([^\]]*)\]\(([^)]*)\)/g;
 
 async function insertImageFile(file: File, view: EditorView) {
   if (!isImageFile(file)) return;
@@ -230,11 +232,16 @@ export function MemoEditor({ content, settings, onSave, onCancel, onChange }: Me
             }
           }
         }
+        // Problem 3 fix: ペースト時の自動リンク化を制限する
+        // カーソル直前が "![](" の画像構文内ならプレーンテキストとして挿入
         const clipboardText = event.clipboardData?.getData('text/plain') ?? '';
         if (!/^https?:\/\//.test(clipboardText)) return false;
-        event.preventDefault();
         const { state } = view;
         const sel = state.selection.main;
+        const beforeCursor = state.sliceDoc(Math.max(0, sel.from - 10), sel.from);
+        const isInsideImageSyntax = /!\[.*\]\($/.test(beforeCursor);
+        if (isInsideImageSyntax) return false;
+        event.preventDefault();
         if (!sel.empty) {
           const selectedText = state.sliceDoc(sel.from, sel.to);
           view.dispatch({
