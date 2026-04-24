@@ -3,9 +3,12 @@
 // =============================================================================
 
 import { useState, useRef } from 'react';
+import JSZip from 'jszip';
 import { storage } from '@/lib/storage';
 import { EXPORT_VERSION } from '@/lib/constants';
 import type { ExportData, ImportMode, StorageSchema } from '@/types';
+import { getAllImages, importImages } from '@/lib/image-storage';
+import type { ImageRecord } from '@/lib/image-storage';
 
 interface ImportExportPanelProps {
     onImportComplete: () => void;
@@ -22,7 +25,7 @@ export function ImportExportPanel({ onImportComplete }: ImportExportPanelProps) 
     const [isProcessing, setIsProcessing] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // エクスポート
+    // エクスポート (ZIP)
     const handleExport = async () => {
         try {
             setIsProcessing(true);
@@ -35,14 +38,23 @@ export function ImportExportPanel({ onImportComplete }: ImportExportPanelProps) 
                 data,
             };
 
-            const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-                type: 'application/json',
-            });
+            const zip = new JSZip();
+            zip.file('memos.json', JSON.stringify(exportData, null, 2));
+
+            const images = await getAllImages();
+            if (images.length > 0) {
+                const imagesFolder = zip.folder('images');
+                for (const img of images) {
+                    imagesFolder!.file(img.id, img.blob);
+                }
+            }
+
+            const blob = await zip.generateAsync({ type: 'blob' });
             const url = URL.createObjectURL(blob);
 
             const a = document.createElement('a');
             a.href = url;
-            a.download = `pageminder-backup-${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `pageminder-backup-${new Date().toISOString().split('T')[0]}.zip`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -50,7 +62,7 @@ export function ImportExportPanel({ onImportComplete }: ImportExportPanelProps) 
 
             setResult({
                 type: 'success',
-                message: `エクスポートが完了しました（${data.memos.length}件のメモ）`,
+                message: `エクスポートが完了しました（${data.memos.length}件のメモ、${images.length}件の画像）`,
             });
         } catch (error) {
             setResult({
@@ -67,7 +79,7 @@ export function ImportExportPanel({ onImportComplete }: ImportExportPanelProps) 
         fileInputRef.current?.click();
     };
 
-    // インポート処理
+    // インポート処理 (ZIP or JSON)
     const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -76,31 +88,10 @@ export function ImportExportPanel({ onImportComplete }: ImportExportPanelProps) 
             setIsProcessing(true);
             setResult(null);
 
-            const text = await file.text();
-            const importData = JSON.parse(text) as ExportData;
-
-            // バリデーション
-            if (!importData.version || !importData.data) {
-                throw new Error('無効なファイル形式です');
-            }
-
-            if (!importData.data.memos || !Array.isArray(importData.data.memos)) {
-                throw new Error('メモデータが見つかりません');
-            }
-
-            // インポート実行
-            if (importMode === 'overwrite') {
-                await storage.importAll(importData.data);
-                setResult({
-                    type: 'success',
-                    message: `インポートが完了しました（${importData.data.memos.length}件のメモを上書き）`,
-                });
+            if (file.name.endsWith('.zip')) {
+                await handleZipImport(file);
             } else {
-                const imported = await storage.importMerge(importData.data);
-                setResult({
-                    type: 'success',
-                    message: `インポートが完了しました（${imported}件の新規メモを追加）`,
-                });
+                await handleJsonImport(file);
             }
 
             onImportComplete();
@@ -111,10 +102,92 @@ export function ImportExportPanel({ onImportComplete }: ImportExportPanelProps) 
             });
         } finally {
             setIsProcessing(false);
-            // ファイル入力をリセット
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
+        }
+    };
+
+    const handleZipImport = async (file: File) => {
+        const arrayBuffer = await file.arrayBuffer();
+        const zip = await JSZip.loadAsync(arrayBuffer);
+
+        const memosFile = zip.file('memos.json');
+        if (!memosFile) {
+            throw new Error('memos.json が見つかりません');
+        }
+
+        const text = await memosFile.async('string');
+        const importData = JSON.parse(text) as ExportData;
+
+        if (!importData.version || !importData.data) {
+            throw new Error('無効なファイル形式です');
+        }
+
+        if (!importData.data.memos || !Array.isArray(importData.data.memos)) {
+            throw new Error('メモデータが見つかりません');
+        }
+
+        // メモデータをインポート
+        if (importMode === 'overwrite') {
+            await storage.importAll(importData.data);
+            setResult({
+                type: 'success',
+                message: `インポートが完了しました（${importData.data.memos.length}件のメモを上書き）`,
+            });
+        } else {
+            const imported = await storage.importMerge(importData.data);
+            setResult({
+                type: 'success',
+                message: `インポートが完了しました（${imported}件の新規メモを追加）`,
+            });
+        }
+
+        // 画像をインポート
+        const imagesFolder = zip.folder('images');
+        if (imagesFolder) {
+            const imageFiles = imagesFolder.filter(() => true);
+            if (imageFiles.length > 0) {
+                const imageRecords: ImageRecord[] = [];
+                for (const imgFile of imageFiles) {
+                    const id = imgFile.name;
+                    const blob = await imgFile.async('blob');
+                    imageRecords.push({
+                        id,
+                        blob,
+                        mimeType: 'image/webp',
+                        createdAt: new Date().toISOString(),
+                    });
+                }
+                await importImages(imageRecords);
+            }
+        }
+    };
+
+    const handleJsonImport = async (file: File) => {
+        const text = await file.text();
+        const importData = JSON.parse(text) as ExportData;
+
+        if (!importData.version || !importData.data) {
+            throw new Error('無効なファイル形式です');
+        }
+
+        if (!importData.data.memos || !Array.isArray(importData.data.memos)) {
+            throw new Error('メモデータが見つかりません');
+        }
+
+        if (importMode === 'overwrite') {
+            await storage.importAll(importData.data);
+            setResult({
+                type: 'success',
+                message: `インポートが完了しました（${importData.data.memos.length}件のメモを上書き）`,
+            });
+        } else {
+            const imported = await storage.importMerge(importData.data);
+            setResult({
+                type: 'success',
+                message: `インポートが完了しました（${imported}件の新規メモを追加）`,
+            });
         }
     };
 
@@ -124,7 +197,7 @@ export function ImportExportPanel({ onImportComplete }: ImportExportPanelProps) 
             <section className="import-export-section">
                 <h3>エクスポート</h3>
                 <p>
-                    全てのメモと設定をJSONファイルとしてダウンロードします。
+                    全てのメモ・画像・設定をZIPファイルとしてダウンロードします。
                     バックアップや別のブラウザへの移行に使用できます。
                 </p>
                 <button
@@ -141,7 +214,7 @@ export function ImportExportPanel({ onImportComplete }: ImportExportPanelProps) 
             <section className="import-export-section">
                 <h3>インポート</h3>
                 <p>
-                    以前エクスポートしたJSONファイルをインポートします。
+                    以前エクスポートしたZIPファイルまたはJSONファイルをインポートします。
                 </p>
 
                 <div className="import-export-options">
@@ -170,7 +243,7 @@ export function ImportExportPanel({ onImportComplete }: ImportExportPanelProps) 
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".json"
+                    accept=".json,.zip"
                     className="import-export-file-input"
                     onChange={handleImport}
                 />
