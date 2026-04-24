@@ -13,6 +13,7 @@ import { useDraggable } from '@/hooks/useDraggable';
 import { useResizable } from '@/hooks/useResizable';
 import { IconStickyNote, IconMinimize } from '@/components/icons';
 import { getImage } from '@/lib/image-storage';
+import { extractImageIds } from '@/lib/image-utils';
 import { MEMO_IMG_PROTOCOL } from '@/lib/constants';
 import {
   DEFAULT_MEMO_SIZE,
@@ -56,13 +57,72 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
   const [animationState, setAnimationState] = useState<'enter' | 'idle' | 'shrink' | 'expand' | 'exit'>('enter');
   const [isDeleting, setIsDeleting] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  // imageId → blob URL のマップ。画像をstateに持つことで
+  // parsedContent HTML にURLを直接埋め込み、imperativeなDOM操作を排除する
+  const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const prevMinimizedRef = useRef(memo.minimized);
+  // アンマウント時のblob URL解放用
   const objectUrlsRef = useRef<Map<string, string>>(new Map());
 
-  // markedのカスタムレンダラー: リンクを新しいタブで開く
-  const customRenderer = useMemo(() => {
+  // memo.content が変わったとき（画像追加・削除・編集完了）に
+  // 必要な画像をIndexedDBから読み込み、不要なblob URLをrevokeする
+  useEffect(() => {
+    if (isEditing) return;
+
+    const currentIds = extractImageIds(memo.content ?? '');
+    const cache = objectUrlsRef.current;
+
+    // コンテンツから消えた画像のblob URLをrevoke
+    const removedIds = [...cache.keys()].filter((id) => !currentIds.includes(id));
+    for (const id of removedIds) {
+      URL.revokeObjectURL(cache.get(id)!);
+      cache.delete(id);
+    }
+
+    if (currentIds.length === 0) {
+      if (cache.size > 0) setImageUrls(new Map());
+      return;
+    }
+
+    // 未ロードの画像だけIndexedDBから取得
+    const unloaded = currentIds.filter((id) => !cache.has(id));
+    if (unloaded.length === 0) {
+      // すでに全部キャッシュ済み → stateを同期するだけ
+      setImageUrls(new Map(cache));
+      return;
+    }
+
+    let cancelled = false;
+    const loadImages = async () => {
+      for (const id of unloaded) {
+        if (cancelled) break;
+        const blob = await getImage(id);
+        if (cancelled || !blob) continue;
+        const url = URL.createObjectURL(blob);
+        cache.set(id, url);
+      }
+      if (!cancelled) setImageUrls(new Map(cache));
+    };
+    loadImages();
+    return () => { cancelled = true; };
+  }, [memo.content, isEditing]);
+
+  // アンマウント時にすべてのblob URLを解放
+  useEffect(() => {
+    const cache = objectUrlsRef.current;
+    return () => {
+      cache.forEach((u) => URL.revokeObjectURL(u));
+      cache.clear();
+    };
+  }, []);
+
+  // Markdownをパース。imageUrlsにblob URLを直接埋め込むことで
+  // dangerouslySetInnerHTMLのHTMLに画像srcが含まれた状態を維持する
+  // → ドラッグ・リサイズ・再レンダリング時に画像が消えない
+  const parsedContent = useMemo(() => {
+    if (!memo.content) return '';
     const renderer = new Renderer();
     renderer.link = ({ href, title, text }) => {
       const titleAttr = title ? ` title="${title}"` : '';
@@ -72,23 +132,23 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
       if (href && href.startsWith(MEMO_IMG_PROTOCOL)) {
         const id = href.slice(MEMO_IMG_PROTOCOL.length);
         const titleAttr = title ? ` title="${title}"` : '';
+        const url = imageUrls.get(id);
+        if (url) {
+          // blob URL埋め込み済み → srcが常にHTMLに含まれる
+          return `<img src="${url}" data-memo-img="${id}"${titleAttr} alt="${text}" style="max-width:100%;border-radius:4px;cursor:pointer;" />`;
+        }
+        // ロード中
         return `<img data-memo-img="${id}"${titleAttr} alt="${text}" data-loading="true" />`;
       }
       const titleAttr = title ? ` title="${title}"` : '';
       return `<img src="${href}"${titleAttr} alt="${text}" style="max-width:100%;border-radius:4px;" />`;
     };
-    return renderer;
-  }, []);
-
-  // Markdownをパース（GFM + 単一改行をbrに変換）
-  const parsedContent = useMemo(() => {
-    if (!memo.content) return '';
     return marked(memo.content, {
-      renderer: customRenderer,
-      gfm: true,      // GitHub Flavored Markdown
-      breaks: true,   // 単一改行を<br>に変換
+      renderer,
+      gfm: true,
+      breaks: true,
     }) as string;
-  }, [memo.content, customRenderer]);
+  }, [memo.content, imageUrls]);
 
   // h1からタイトルを自動抽出（タイトルが未設定の場合）
   useEffect(() => {
@@ -107,66 +167,6 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
     }
   }, [shouldOpenSettings]);
 
-  // Problem 1 fix: Object URLを画像ID単位でキャッシュし、不要なrevokeを防ぐ
-  // ReactがdangerouslySetInnerHTMLでDOMを再構築しても、既存のObject URLは有効なまま
-  // 新しい画像IDに対してのみIndexedDBから読み込み、不要になったものだけrevokeする
-  useEffect(() => {
-    if (isEditing || !contentAreaRef.current) return;
-    const el = contentAreaRef.current;
-    const imgElements = el.querySelectorAll('img[data-memo-img]');
-    if (imgElements.length === 0) {
-      const cache = objectUrlsRef.current;
-      if (cache.size > 0) {
-        cache.forEach((u) => URL.revokeObjectURL(u));
-        cache.clear();
-      }
-      return;
-    }
-
-    const currentIds = new Set<string>();
-    imgElements.forEach((img) => {
-      const id = img.getAttribute('data-memo-img');
-      if (id) currentIds.add(id);
-    });
-
-    const cache = objectUrlsRef.current;
-    const removedIds = [...cache.keys()].filter((id) => !currentIds.has(id));
-    for (const id of removedIds) {
-      URL.revokeObjectURL(cache.get(id)!);
-      cache.delete(id);
-    }
-
-    let cancelled = false;
-    const loadImages = async () => {
-      for (const img of imgElements) {
-        if (cancelled) break;
-        const id = img.getAttribute('data-memo-img');
-        if (!id) continue;
-        if (cache.has(id)) {
-          img.setAttribute('src', cache.get(id)!);
-          img.removeAttribute('data-loading');
-          continue;
-        }
-        const blob = await getImage(id);
-        if (cancelled || !blob) continue;
-        const url = URL.createObjectURL(blob);
-        cache.set(id, url);
-        img.setAttribute('src', url);
-        img.removeAttribute('data-loading');
-      }
-    };
-    loadImages();
-    return () => { cancelled = true; };
-  }, [parsedContent, isEditing]);
-
-  // Object URLのクリーンアップ（アンマウント時）
-  useEffect(() => {
-    const cache = objectUrlsRef.current;
-    return () => {
-      cache.forEach((u) => URL.revokeObjectURL(u));
-      cache.clear();
-    };
-  }, []);
 
   // ライトボックス: ESCキーで閉じる
   useEffect(() => {
