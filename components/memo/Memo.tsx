@@ -402,6 +402,65 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
   if (memo.minimized) {
     const isActivationMinimized = isActivated && isNearElementMode;
 
+    // ラベルモード: アイコン + タイトルのワイドビュー
+    if (memo.labelMode) {
+      const labelTitle = memo.title ?? 'メモ';
+      return (
+        <div
+          ref={containerRef}
+          className={getAnimationClass()}
+          style={{
+            ...baseStyle,
+            position: isActivationMinimized ? 'relative' : 'fixed',
+            left: isActivationMinimized ? undefined : `${dragPosition.x}px`,
+            top: isActivationMinimized ? undefined : `${dragPosition.y - 8}px`,
+            zIndex: 999999,
+            cursor: 'pointer',
+          }}
+          onClick={toggleMinimize}
+          onMouseDown={isActivationMinimized ? undefined : handleDragStart}
+          title={labelTitle}
+        >
+          <div
+            style={{
+              backgroundColor: memoBgColor,
+              color: memoTextColor,
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 10px 6px 8px',
+              maxWidth: '200px',
+              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+              transform: 'scale(1)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.04)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.22)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            }}
+          >
+            <IconStickyNote size={16} color={memoTextColor} />
+            <span style={{
+              fontSize: '12px',
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '140px',
+            }}>
+              {labelTitle}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // 通常の最小化ビュー（アイコンのみ）
     return (
       <div
         ref={containerRef}
@@ -435,6 +494,7 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             alignItems: 'center',
             justifyContent: 'center',
             transition: 'transform 0.15s ease',
+            transform: 'scale(1)',
           }}
           onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
           onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
@@ -481,6 +541,8 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             cursor: isNearElementMode ? 'default' : 'move',
             userSelect: 'none',
             minWidth: 0,
+            // 最小化アイコンのhoverでimperativeに付いたscaleをリセット
+            transform: 'none',
           }}
           onMouseDown={isNearElementMode ? undefined : handleDragStart}
         >
@@ -598,6 +660,7 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             settings={settings}
             isPinned={position.pinned}
             onTogglePin={togglePin}
+            onToggleLabelMode={() => onUpdate({ ...memo, labelMode: !memo.labelMode })}
             onDelete={() => setIsDeleteDialogOpen(true)}
             onColorChange={(color) => onUpdate({ ...memo, backgroundColor: color })}
             onFontSizeChange={(size) => onUpdate({ ...memo, fontSize: size })}

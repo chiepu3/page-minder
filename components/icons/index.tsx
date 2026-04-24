@@ -168,6 +168,24 @@ export function IconLightMode({ size = 24, color = 'currentColor', style }: Icon
   );
 }
 
+/** ラベルアイコン (label) - 最小化時タイトル表示モード ON */
+export function IconLabel({ size = 24, color = 'currentColor', style }: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox={VIEWBOX} fill={color} style={style}>
+      <path d="M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h440q19 0 36 8.5t28 23.5l216 288-216 288q-11 15-28 23.5t-36 8.5H160Zm0-80h440l180-240-180-240H160v480Zm220-240Z"/>
+    </svg>
+  );
+}
+
+/** ラベルOFFアイコン (label_off) - 最小化時タイトル表示モード OFF */
+export function IconLabelOff({ size = 24, color = 'currentColor', style }: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox={VIEWBOX} fill={color} style={style}>
+      <path d="m757-317-57-57 80-106-180-240H354l-80-80h326q19 0 36 8.5t28 23.5l216 288-123 163Zm-597 77h448L160-688v448ZM820-28 661-187q-10 13-24 20t-31 7H160q-33 0-56.5-23.5T80-240v-480q0-11 2.5-20.5T90-758l-62-62 56-56L876-84l-56 56ZM567-547Zm-183 83Z"/>
+    </svg>
+  );
+}
+
 /** ドラッグハンドルアイコン (drag_indicator) */
 export function IconDragHandle({ size = 24, color = 'currentColor', style }: IconProps) {
   return (

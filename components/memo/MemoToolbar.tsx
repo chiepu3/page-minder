@@ -5,12 +5,14 @@
 import { Memo, GlobalSettings } from '@/types';
 import { PASTEL_COLORS, COLOR_PALETTE, THEMES } from '@/lib/constants';
 import { useState } from 'react';
-import { 
-  IconPin, 
-  IconPinOff, 
-  IconCopy, 
-  IconPalette, 
-  IconDelete, 
+import {
+  IconPin,
+  IconPinOff,
+  IconLabel,
+  IconLabelOff,
+  IconCopy,
+  IconPalette,
+  IconDelete,
   IconWarning,
   IconFormatSize,
   IconSettings
@@ -21,6 +23,7 @@ interface MemoToolbarProps {
   settings: GlobalSettings;
   isPinned: boolean;
   onTogglePin: () => void;
+  onToggleLabelMode: () => void;
   onDelete: () => void;
   onColorChange: (color: string) => void;
   onFontSizeChange: (size: number) => void;
@@ -37,6 +40,7 @@ export function MemoToolbar({
   settings,
   isPinned,
   onTogglePin,
+  onToggleLabelMode,
   onDelete,
   onColorChange,
   onFontSizeChange,
@@ -88,6 +92,14 @@ export function MemoToolbar({
             active={isPinned}
           />
         )}
+        {/* ラベルモード: 幅が足りない場合は非表示（low priority） */}
+        <ToolbarButton
+          icon={memo.labelMode ? <IconLabelOff size={16} /> : <IconLabel size={16} />}
+          title={memo.labelMode ? 'タイトル表示を解除' : '最小化時にタイトルを表示'}
+          onClick={onToggleLabelMode}
+          active={!!memo.labelMode}
+          lowPriority
+        />
         <ToolbarButton 
           icon={<IconCopy size={16} />} 
           title="コピー" 
@@ -166,9 +178,11 @@ interface ToolbarButtonProps {
   active?: boolean;
   danger?: boolean;
   dangerColor?: string;
+  /** 幅が足りない場合に非表示にする低優先度ボタン */
+  lowPriority?: boolean;
 }
 
-function ToolbarButton({ icon, title, onClick, active, danger, dangerColor }: ToolbarButtonProps) {
+function ToolbarButton({ icon, title, onClick, active, danger, dangerColor, lowPriority }: ToolbarButtonProps) {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
@@ -186,6 +200,10 @@ function ToolbarButton({ icon, title, onClick, active, danger, dangerColor }: To
         transition: 'all 0.15s ease',
         transform: isHovered ? 'scale(0.95)' : 'scale(1)',
         color: danger ? (dangerColor || '#d32f2f') : '#555',
+        // 低優先度ボタン: コンテナがオーバーフローしたときに非表示
+        flexShrink: lowPriority ? 1 : 0,
+        minWidth: lowPriority ? 0 : undefined,
+        overflow: 'hidden',
       }}
       title={title}
       onClick={onClick}
