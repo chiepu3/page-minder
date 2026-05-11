@@ -32,7 +32,7 @@ export function MemoContainer() {
   const [activatedMemos, setActivatedMemos] = useState<Map<string, Element>>(new Map());
   const [hiddenByVisibility, setHiddenByVisibility] = useState<Set<string>>(new Set());
 
-  const { deactivateMemo, pauseDeactivation, resumeDeactivation } = useActivation(memos, {
+  const { deactivateMemo, forceDeactivateMemo, pauseDeactivation, resumeDeactivation } = useActivation(memos, {
     onActivate: (memoId, triggerElement) => {
       setActivatedMemos(prev => new Map(prev).set(memoId, triggerElement));
       setHiddenByVisibility(prev => {
@@ -377,7 +377,7 @@ export function MemoContainer() {
             onStartElementPicker={handleStartElementPicker}
             onPauseActivation={(reason) => pauseDeactivation(memo.id, reason)}
             onResumeActivation={(reason) => resumeDeactivation(memo.id, reason)}
-            onClose={() => deactivateMemo(memoId)}
+            onClose={() => forceDeactivateMemo(memoId)}
             isHiddenByVisibility={hiddenByVisibility.has(memoId)}
           />
         );

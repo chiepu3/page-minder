@@ -151,6 +151,11 @@ export function useActivation(
         optionsRef.current.onDeactivate(memoId);
     }
 
+    function forceDeactivateMemoInternal(memoId: string) {
+        pausedStatesRef.current.delete(memoId);
+        deactivateMemoInternal(memoId);
+    }
+
     function setDeactivationTimeout(memoId: string, delay: number) {
         clearMemoTimeout(memoId);
         const timeoutId = setTimeout(() => {
@@ -582,6 +587,7 @@ export function useActivation(
 
     return {
         deactivateMemo: deactivateMemoInternal,
+        forceDeactivateMemo: forceDeactivateMemoInternal,
         isActive: (memoId: string) => activeStatesRef.current.has(memoId),
         pauseDeactivation,
         resumeDeactivation,
