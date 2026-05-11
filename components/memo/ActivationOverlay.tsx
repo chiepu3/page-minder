@@ -554,6 +554,7 @@ function ActivationOverlayComponent({
                     isActivated={true}
                     onPauseActivation={onPauseActivation}
                     onResumeActivation={onResumeActivation}
+                    onCloseActivation={onClose}
                 />
             </div>
         </>

@@ -45,14 +45,25 @@ export function useActivation(
     const selectorMemoMapRef = useRef<Map<string, Memo[]> | null>(null);
 
     // メモ外クリックで非表示
+    // Shadow DOM対応: composedPath() で実際のクリック経路を確認する
     useEffect(() => {
         const handleDocumentClick = (e: MouseEvent) => {
-            const target = e.target as Element;
+            const composedPath = e.composedPath();
 
             activeStatesRef.current.forEach((state, memoId) => {
                 if (state.config.hideCondition === 'click-outside') {
-                    const memoElement = document.querySelector(`[data-memo-id="${memoId}"]`);
-                    if (memoElement && !memoElement.contains(target) && !state.triggerElement.contains(target)) {
+                    // トリガー要素がクリックパスに含まれるか
+                    const clickedTrigger = composedPath.includes(state.triggerElement);
+                    // Shadow DOM内のactivation-overlay（data-memo-id属性）がクリックパスに含まれるか
+                    // 注意: text nodeなど非Elementノードに.closest/.getAttributeは存在しない。
+                    // undefined !== null → true になるので instanceof Element で先にフィルタする。
+                    const clickedMemo = composedPath.some(el => {
+                        if (!(el instanceof Element)) return false;
+                        return el.getAttribute('data-memo-id') === memoId
+                            || el.closest('[data-memo-id="' + memoId + '"]') !== null;
+                    });
+
+                    if (!clickedTrigger && !clickedMemo) {
                         deactivateMemoInternal(memoId);
                     }
                 }
@@ -138,6 +149,11 @@ export function useActivation(
         clearMemoTimeout(memoId);
         activeStatesRef.current.delete(memoId);
         optionsRef.current.onDeactivate(memoId);
+    }
+
+    function forceDeactivateMemoInternal(memoId: string) {
+        pausedStatesRef.current.delete(memoId);
+        deactivateMemoInternal(memoId);
     }
 
     function setDeactivationTimeout(memoId: string, delay: number) {
@@ -276,9 +292,10 @@ export function useActivation(
                 }
 
                 // 既にアクティブなら非表示（トグル動作）
-                // ただし、一時停止中（設定画面など）は無視して常に表示維持
+                // ただし click-outside 条件の場合はトリガー再クリックでは閉じない
+                // （click-outside 側のハンドラに任せる）
                 if (activeStatesRef.current.has(memo.id)) {
-                    if (!pausedStatesRef.current.has(memo.id)) {
+                    if (config.hideCondition !== 'click-outside' && !pausedStatesRef.current.has(memo.id)) {
                         deactivateMemoInternal(memo.id);
                     }
                 } else {
@@ -302,13 +319,26 @@ export function useActivation(
         // focus トリガー
         if (config.trigger === 'focus') {
             const handleFocusIn = () => {
+                // 猶予タイマーをキャンセル（フォーカスが戻ってきた場合）
+                const graceId = graceTimeoutIdsRef.current.get(memo.id);
+                if (graceId) {
+                    clearTimeout(graceId);
+                    graceTimeoutIdsRef.current.delete(memo.id);
+                }
                 activateMemoInternal(memo, element, config);
             };
 
             const handleFocusOut = () => {
                 if (config.hideCondition === 'trigger-end') {
-                    deactivateMemoInternal(memo.id);
+                    // 猶予時間後に非表示（フォーカスが即座に別要素に移った場合の対策）
+                    const gracePeriod = optionsRef.current.settings.activationHideGracePeriod ?? 300;
+                    const graceTimeoutId = setTimeout(() => {
+                        graceTimeoutIdsRef.current.delete(memo.id);
+                        deactivateMemoInternal(memo.id);
+                    }, gracePeriod);
+                    graceTimeoutIdsRef.current.set(memo.id, graceTimeoutId);
                 }
+                // click-outside・manual・timeoutの場合はfocusoutでは非表示にしない
             };
 
             element.addEventListener('focusin', handleFocusIn);
@@ -557,6 +587,7 @@ export function useActivation(
 
     return {
         deactivateMemo: deactivateMemoInternal,
+        forceDeactivateMemo: forceDeactivateMemoInternal,
         isActive: (memoId: string) => activeStatesRef.current.has(memoId),
         pauseDeactivation,
         resumeDeactivation,

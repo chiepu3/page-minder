@@ -14,7 +14,6 @@ import { useResizable } from '@/hooks/useResizable';
 import { IconStickyNote, IconMinimize } from '@/components/icons';
 import { getImage } from '@/lib/image-storage';
 import { extractImageIds } from '@/lib/image-utils';
-import { MEMO_IMG_PROTOCOL } from '@/lib/constants';
 import {
   DEFAULT_MEMO_SIZE,
   MINIMIZED_SIZE,
@@ -23,6 +22,7 @@ import {
   PASTEL_COLORS,
   THEMES,
   DRAG_THRESHOLD,
+  MEMO_IMG_PROTOCOL,
 } from '@/lib/constants';
 
 interface MemoProps {
@@ -42,6 +42,8 @@ interface MemoProps {
   onPauseActivation?: (reason: string) => void;
   /** アクティブ化の一時停止解除 */
   onResumeActivation?: (reason: string) => void;
+  /** アクティブ化を手動で閉じる（manual条件時に×ボタンとして使用） */
+  onCloseActivation?: () => void;
   /** 同じページにマッチする他のメモのURLパターン */
   existingPatterns?: import('@/types').UrlPattern[];
 }
@@ -49,14 +51,15 @@ interface MemoProps {
 /**
  * 個別メモコンポーネント
  */
-export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, onStartElementPicker, shouldOpenSettings, onSettingsOpened, onPauseActivation, onResumeActivation, existingPatterns = [] }: MemoProps) {
+export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, onStartElementPicker, shouldOpenSettings, onSettingsOpened, onPauseActivation, onResumeActivation, onCloseActivation, existingPatterns = [] }: MemoProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const renderedContentRef = useRef<HTMLDivElement>(null);
   // アニメーション状態: enter=出現, idle=通常, shrink=最小化中, expand=展開中, exit=削除中
   const [animationState, setAnimationState] = useState<'enter' | 'idle' | 'shrink' | 'expand' | 'exit'>('enter');
   const [isDeleting, setIsDeleting] = useState(false);
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   // imageId → blob URL のマップ。画像をstateに持つことで
   // parsedContent HTML にURLを直接埋め込み、imperativeなDOM操作を排除する
   const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
@@ -159,6 +162,31 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
       }
     }
   }, [memo.content]);
+
+  // 画像クリックでlightboxを開く（pointer-events:noneの親から有効化）
+  useEffect(() => {
+    const container = renderedContentRef.current;
+    if (!container || isEditing) return;
+
+    const imgs = Array.from(container.querySelectorAll<HTMLImageElement>('img'));
+    if (imgs.length === 0) return;
+
+    const cleanups: Array<() => void> = [];
+
+    imgs.forEach((img) => {
+      img.style.pointerEvents = 'auto';
+      img.style.cursor = 'zoom-in';
+
+      const handler = (e: MouseEvent) => {
+        e.stopPropagation();
+        setLightboxSrc(img.src);
+      };
+      img.addEventListener('click', handler);
+      cleanups.push(() => img.removeEventListener('click', handler));
+    });
+
+    return () => { cleanups.forEach(fn => fn()); };
+  }, [parsedContent, isEditing]);
 
   // セレクタ選択後に設定モーダルを自動的に開く
   useEffect(() => {
@@ -402,6 +430,65 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
   if (memo.minimized) {
     const isActivationMinimized = isActivated && isNearElementMode;
 
+    // ラベルモード: アイコン + タイトルのワイドビュー
+    if (memo.labelMode) {
+      const labelTitle = memo.title ?? 'メモ';
+      return (
+        <div
+          ref={containerRef}
+          className={getAnimationClass()}
+          style={{
+            ...baseStyle,
+            position: isActivationMinimized ? 'relative' : 'fixed',
+            left: isActivationMinimized ? undefined : `${dragPosition.x}px`,
+            top: isActivationMinimized ? undefined : `${dragPosition.y - 8}px`,
+            zIndex: 999999,
+            cursor: 'pointer',
+          }}
+          onClick={toggleMinimize}
+          onMouseDown={isActivationMinimized ? undefined : handleDragStart}
+          title={labelTitle}
+        >
+          <div
+            style={{
+              backgroundColor: memoBgColor,
+              color: memoTextColor,
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 10px 6px 8px',
+              maxWidth: '200px',
+              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+              transform: 'scale(1)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.04)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.22)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            }}
+          >
+            <IconStickyNote size={16} color={memoTextColor} />
+            <span style={{
+              fontSize: '12px',
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '140px',
+            }}>
+              {labelTitle}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // 通常の最小化ビュー（アイコンのみ）
     return (
       <div
         ref={containerRef}
@@ -435,6 +522,7 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             alignItems: 'center',
             justifyContent: 'center',
             transition: 'transform 0.15s ease',
+            transform: 'scale(1)',
           }}
           onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
           onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
@@ -481,6 +569,8 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
             cursor: isNearElementMode ? 'default' : 'move',
             userSelect: 'none',
             minWidth: 0,
+            // 最小化アイコンのhoverでimperativeに付いたscaleをリセット
+            transform: 'none',
           }}
           onMouseDown={isNearElementMode ? undefined : handleDragStart}
         >
@@ -499,12 +589,41 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
               justifyContent: 'center',
               flexShrink: 0,
             }}
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={toggleMinimize}
             onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
             onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
           >
             <IconMinimize size={18} color={memoTextColor} />
           </button>
+          {isActivated && memo.activation?.hideCondition === 'manual' && onCloseActivation && (
+            <button
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                opacity: 0.6,
+                padding: '2px',
+                marginLeft: '2px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                width: '18px',
+                height: '18px',
+                fontSize: '14px',
+                lineHeight: 1,
+                color: memoTextColor,
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); onCloseActivation(); }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
+              title="閉じる"
+            >
+              ×
+            </button>
+          )}
         </div>
 
         {/* コンテンツエリア */}
@@ -573,9 +692,10 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
               }}
             >
               {memo.content ? (
-                <div 
+                <div
+                  ref={renderedContentRef}
                   dangerouslySetInnerHTML={{ __html: parsedContent }}
-                  style={{ 
+                  style={{
                     backgroundColor: 'transparent',
                     fontSize: 'inherit',
                     pointerEvents: 'none',
