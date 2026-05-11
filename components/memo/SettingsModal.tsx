@@ -44,6 +44,7 @@ const DEFAULT_ACTIVATION: ActivationConfig = {
 export function SettingsModal({ memo, settings, onUpdate, onClose, onStartElementPicker, initialTab = 'general', onMount, existingPatterns = [] }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [title, setTitle] = useState(memo.title || '');
+  const [showTitle, setShowTitle] = useState(memo.showTitle !== false);
   const [urlPatterns, setUrlPatterns] = useState<UrlPattern[]>(memo.urlPatterns);
   const [activation, setActivation] = useState<ActivationConfig>(memo.activation ?? DEFAULT_ACTIVATION);
   const [currentUrl, setCurrentUrl] = useState('');
@@ -64,6 +65,7 @@ export function SettingsModal({ memo, settings, onUpdate, onClose, onStartElemen
     onUpdate({
       ...memo,
       title,
+      showTitle,
       urlPatterns,
       activation,
       updatedAt: new Date().toISOString(),
@@ -258,6 +260,20 @@ export function SettingsModal({ memo, settings, onUpdate, onClose, onStartElemen
                   onBlur={(e) => (e.currentTarget.style.borderColor = theme.border)}
                 />
               </div>
+
+          {/* タイトルバー表示設定 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <input
+              type="checkbox"
+              checked={showTitle}
+              onChange={(e) => setShowTitle(e.target.checked)}
+              id="showTitle"
+              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+            />
+            <label htmlFor="showTitle" style={{ fontSize: '14px', color: theme.text, cursor: 'pointer' }}>
+              タイトルバーを表示する
+            </label>
+          </div>
 
           {/* 出現条件設定 */}
           <div style={sectionStyle}>

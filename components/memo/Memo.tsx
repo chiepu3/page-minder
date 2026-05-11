@@ -14,7 +14,6 @@ import { useResizable } from '@/hooks/useResizable';
 import { IconStickyNote, IconMinimize } from '@/components/icons';
 import { getImage } from '@/lib/image-storage';
 import { extractImageIds } from '@/lib/image-utils';
-import { MEMO_IMG_PROTOCOL } from '@/lib/constants';
 import {
   DEFAULT_MEMO_SIZE,
   MINIMIZED_SIZE,
@@ -23,6 +22,7 @@ import {
   PASTEL_COLORS,
   THEMES,
   DRAG_THRESHOLD,
+  MEMO_IMG_PROTOCOL,
 } from '@/lib/constants';
 
 interface MemoProps {
@@ -53,10 +53,11 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
   const [isEditing, setIsEditing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const renderedContentRef = useRef<HTMLDivElement>(null);
   // アニメーション状態: enter=出現, idle=通常, shrink=最小化中, expand=展開中, exit=削除中
   const [animationState, setAnimationState] = useState<'enter' | 'idle' | 'shrink' | 'expand' | 'exit'>('enter');
   const [isDeleting, setIsDeleting] = useState(false);
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   // imageId → blob URL のマップ。画像をstateに持つことで
   // parsedContent HTML にURLを直接埋め込み、imperativeなDOM操作を排除する
   const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
@@ -159,6 +160,31 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
       }
     }
   }, [memo.content]);
+
+  // 画像クリックでlightboxを開く（pointer-events:noneの親から有効化）
+  useEffect(() => {
+    const container = renderedContentRef.current;
+    if (!container || isEditing) return;
+
+    const imgs = Array.from(container.querySelectorAll<HTMLImageElement>('img'));
+    if (imgs.length === 0) return;
+
+    const cleanups: Array<() => void> = [];
+
+    imgs.forEach((img) => {
+      img.style.pointerEvents = 'auto';
+      img.style.cursor = 'zoom-in';
+
+      const handler = (e: MouseEvent) => {
+        e.stopPropagation();
+        setLightboxSrc(img.src);
+      };
+      img.addEventListener('click', handler);
+      cleanups.push(() => img.removeEventListener('click', handler));
+    });
+
+    return () => { cleanups.forEach(fn => fn()); };
+  }, [parsedContent, isEditing]);
 
   // セレクタ選択後に設定モーダルを自動的に開く
   useEffect(() => {
@@ -471,41 +497,43 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
         }}
       >
         {/* ドラッグハンドル（タイトルバー） */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '8px 12px',
-            backgroundColor: 'rgba(0,0,0,0.08)',
-            cursor: isNearElementMode ? 'default' : 'move',
-            userSelect: 'none',
-            minWidth: 0,
-          }}
-          onMouseDown={isNearElementMode ? undefined : handleDragStart}
-        >
-          <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0, fontSize: '12px' }}>
-            {memo.title ?? 'メモ'}
-          </span>
-          <button
+        {memo.showTitle !== false && (
+          <div
             style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              opacity: 0.6,
-              padding: '2px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
+              justifyContent: 'space-between',
+              padding: '8px 12px',
+              backgroundColor: 'rgba(0,0,0,0.08)',
+              cursor: isNearElementMode ? 'default' : 'move',
+              userSelect: 'none',
+              minWidth: 0,
             }}
-            onClick={toggleMinimize}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
+            onMouseDown={isNearElementMode ? undefined : handleDragStart}
           >
-            <IconMinimize size={18} color={memoTextColor} />
-          </button>
-        </div>
+            <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0, fontSize: '12px' }}>
+              {memo.title ?? 'メモ'}
+            </span>
+            <button
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                opacity: 0.6,
+                padding: '2px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+              onClick={toggleMinimize}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
+            >
+              <IconMinimize size={18} color={memoTextColor} />
+            </button>
+          </div>
+        )}
 
         {/* コンテンツエリア */}
         <div 
@@ -573,9 +601,10 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
               }}
             >
               {memo.content ? (
-                <div 
+                <div
+                  ref={renderedContentRef}
                   dangerouslySetInnerHTML={{ __html: parsedContent }}
-                  style={{ 
+                  style={{
                     backgroundColor: 'transparent',
                     fontSize: 'inherit',
                     pointerEvents: 'none',

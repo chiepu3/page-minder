@@ -158,6 +158,25 @@ export const STORAGE_KEYS = {
 } as const;
 
 // -----------------------------------------------------------------------------
+// Image Constants
+// -----------------------------------------------------------------------------
+
+/** 画像の最大幅（px） */
+export const IMAGE_MAX_WIDTH = 1200;
+
+/** 画像の最大サイズ（バイト） */
+export const IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+
+/** 許可する画像のMIMEタイプ */
+export const IMAGE_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+/** IndexedDB画像のURLプロトコル（Markdown内での参照用） */
+export const MEMO_IMG_PROTOCOL = 'pageminder-img://';
+
+/** 孤立画像の削除猶予（次回ブラウザ起動時に削除）のストレージキー */
+export const PENDING_ORPHAN_IMAGE_KEY = '_pendingOrphanImageDeletion';
+
+// -----------------------------------------------------------------------------
 // Export Data Version
 // -----------------------------------------------------------------------------
 
@@ -166,11 +185,3 @@ export const STORAGE_KEYS = {
  */
 export const EXPORT_VERSION = '1.0.0';
 
-// -----------------------------------------------------------------------------
-// Image Constants
-// -----------------------------------------------------------------------------
-
-export const IMAGE_MAX_WIDTH = 1024;
-export const IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024;
-export const IMAGE_ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
-export const MEMO_IMG_PROTOCOL = 'memo-img://';

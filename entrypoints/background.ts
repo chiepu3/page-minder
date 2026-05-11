@@ -5,7 +5,9 @@
 import type { Memo } from '@/types';
 import { storage } from '@/lib/storage';
 import { matchAnyUrlPattern } from '@/lib/url-matcher';
-import { DEFAULT_SETTINGS, DEFAULT_MEMO_SIZE } from '@/lib/constants';
+import { DEFAULT_SETTINGS, DEFAULT_MEMO_SIZE, PENDING_ORPHAN_IMAGE_KEY } from '@/lib/constants';
+import { getOrphanImageIds, deleteImages } from '@/lib/image-storage';
+import { extractImageIds } from '@/lib/image-utils';
 
 const CONTEXT_MENU_ID = 'pageminder-create-memo';
 const CONTEXT_MENU_ACTIVATION_ID = 'pageminder-create-activation-memo';
@@ -50,8 +52,42 @@ async function updateBadgeForActiveTab(): Promise<void> {
   }
 }
 
+/**
+ * 孤立画像クリーンアップ（ブラウザ再起動まで猶予）
+ * 前回セッションで孤立していた画像を削除し、今回の孤立リストを記録する
+ */
+async function cleanupOrphanImages(): Promise<void> {
+  try {
+    const memos = await storage.getMemos();
+    const usedIds = new Set<string>();
+    for (const memo of memos) {
+      extractImageIds(memo.content).forEach(id => usedIds.add(id));
+    }
+
+    // 前回セッションで記録した孤立IDを取得
+    const stored = await chrome.storage.local.get(PENDING_ORPHAN_IMAGE_KEY);
+    const prevOrphans: string[] = stored[PENDING_ORPHAN_IMAGE_KEY] ?? [];
+
+    // 今回も孤立しているものだけ削除（ブラウザ再起動をまたいで2回孤立で削除）
+    const toDelete = prevOrphans.filter(id => !usedIds.has(id));
+    if (toDelete.length > 0) {
+      await deleteImages(toDelete);
+      console.log(`PageMinder: Deleted ${toDelete.length} orphan images from previous session`);
+    }
+
+    // 今回の孤立IDを記録（次回起動時に削除対象となる）
+    const currentOrphans = await getOrphanImageIds(usedIds);
+    await chrome.storage.local.set({ [PENDING_ORPHAN_IMAGE_KEY]: currentOrphans });
+  } catch (error) {
+    console.error('PageMinder: Image cleanup failed', error);
+  }
+}
+
 export default defineBackground(() => {
   console.log('PageMinder background script loaded', { id: browser.runtime.id });
+
+  // 起動時に孤立画像をクリーンアップ（前回セッションの孤立画像を削除）
+  cleanupOrphanImages();
 
   // ==========================================================================
   // SPA対応: URL変更検知
