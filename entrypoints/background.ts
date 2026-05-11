@@ -89,22 +89,19 @@ export default defineBackground(() => {
   // 起動時に孤立画像をクリーンアップ（前回セッションの孤立画像を削除）
   cleanupOrphanImages();
 
-  browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  browser.runtime.onMessage.addListener((message: Record<string, unknown>) => {
     if (message.type === 'IMAGE_GET') {
-      getImage(message.id as string).then(blob => {
-        if (!blob) { sendResponse(null); return; }
-        blob.arrayBuffer().then(buffer => sendResponse({ buffer, mimeType: blob.type }));
+      return getImage(message.id as string).then(blob => {
+        if (!blob) return null;
+        return blob.arrayBuffer().then(buffer => ({ buffer, mimeType: blob.type }));
       });
-      return true;
     }
     if (message.type === 'IMAGE_SAVE') {
       const blob = new Blob([message.buffer as ArrayBuffer], { type: message.mimeType as string });
-      saveImage(blob, message.mimeType as string).then(id => sendResponse({ id }));
-      return true;
+      return saveImage(blob, message.mimeType as string).then(id => ({ id }));
     }
     if (message.type === 'IMAGE_DELETE_MANY') {
-      deleteImages(message.ids as string[]).then(() => sendResponse({ ok: true }));
-      return true;
+      return deleteImages(message.ids as string[]).then(() => ({ ok: true }));
     }
   });
 
