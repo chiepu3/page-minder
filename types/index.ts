@@ -82,7 +82,7 @@ export interface UrlPattern {
 /**
  * アクティブ化のトリガー種別
  */
-export type ActivationTrigger = 'hover' | 'click' | 'focus' | 'info-icon';
+export type ActivationTrigger = 'hover' | 'click' | 'focus';
 
 /**
  * 表示位置モード

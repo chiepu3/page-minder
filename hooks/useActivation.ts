@@ -45,14 +45,22 @@ export function useActivation(
     const selectorMemoMapRef = useRef<Map<string, Memo[]> | null>(null);
 
     // メモ外クリックで非表示
+    // Shadow DOM対応: composedPath() で実際のクリック経路を確認する
     useEffect(() => {
         const handleDocumentClick = (e: MouseEvent) => {
-            const target = e.target as Element;
+            const composedPath = e.composedPath();
 
             activeStatesRef.current.forEach((state, memoId) => {
                 if (state.config.hideCondition === 'click-outside') {
-                    const memoElement = document.querySelector(`[data-memo-id="${memoId}"]`);
-                    if (memoElement && !memoElement.contains(target) && !state.triggerElement.contains(target)) {
+                    // トリガー要素がクリックパスに含まれるか
+                    const clickedTrigger = composedPath.includes(state.triggerElement);
+                    // Shadow DOM内のactivation-overlay（data-memo-id属性）がクリックパスに含まれるか
+                    const clickedMemo = composedPath.some(
+                        el => (el as Element)?.getAttribute?.('data-memo-id') === memoId
+                            || (el as Element)?.closest?.('[data-memo-id="' + memoId + '"]') !== null
+                    );
+
+                    if (!clickedTrigger && !clickedMemo) {
                         deactivateMemoInternal(memoId);
                     }
                 }
@@ -302,13 +310,26 @@ export function useActivation(
         // focus トリガー
         if (config.trigger === 'focus') {
             const handleFocusIn = () => {
+                // 猶予タイマーをキャンセル（フォーカスが戻ってきた場合）
+                const graceId = graceTimeoutIdsRef.current.get(memo.id);
+                if (graceId) {
+                    clearTimeout(graceId);
+                    graceTimeoutIdsRef.current.delete(memo.id);
+                }
                 activateMemoInternal(memo, element, config);
             };
 
             const handleFocusOut = () => {
                 if (config.hideCondition === 'trigger-end') {
-                    deactivateMemoInternal(memo.id);
+                    // 猶予時間後に非表示（フォーカスが即座に別要素に移った場合の対策）
+                    const gracePeriod = optionsRef.current.settings.activationHideGracePeriod ?? 300;
+                    const graceTimeoutId = setTimeout(() => {
+                        graceTimeoutIdsRef.current.delete(memo.id);
+                        deactivateMemoInternal(memo.id);
+                    }, gracePeriod);
+                    graceTimeoutIdsRef.current.set(memo.id, graceTimeoutId);
                 }
+                // click-outside・manual・timeoutの場合はfocusoutでは非表示にしない
             };
 
             element.addEventListener('focusin', handleFocusIn);
