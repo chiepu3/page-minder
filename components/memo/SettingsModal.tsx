@@ -44,7 +44,7 @@ const DEFAULT_ACTIVATION: ActivationConfig = {
 export function SettingsModal({ memo, settings, onUpdate, onClose, onStartElementPicker, initialTab = 'general', onMount, existingPatterns = [] }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [title, setTitle] = useState(memo.title || '');
-  const [showTitle, setShowTitle] = useState(memo.showTitle !== false);
+  const [labelMode, setLabelMode] = useState(!!memo.labelMode);
   const [urlPatterns, setUrlPatterns] = useState<UrlPattern[]>(memo.urlPatterns);
   const [activation, setActivation] = useState<ActivationConfig>(memo.activation ?? DEFAULT_ACTIVATION);
   const [currentUrl, setCurrentUrl] = useState('');
@@ -65,7 +65,7 @@ export function SettingsModal({ memo, settings, onUpdate, onClose, onStartElemen
     onUpdate({
       ...memo,
       title,
-      showTitle,
+      labelMode,
       urlPatterns,
       activation,
       updatedAt: new Date().toISOString(),
@@ -261,17 +261,17 @@ export function SettingsModal({ memo, settings, onUpdate, onClose, onStartElemen
                 />
               </div>
 
-          {/* タイトルバー表示設定 */}
+          {/* 最小化時のラベルモード設定 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <input
               type="checkbox"
-              checked={showTitle}
-              onChange={(e) => setShowTitle(e.target.checked)}
-              id="showTitle"
+              checked={labelMode}
+              onChange={(e) => setLabelMode(e.target.checked)}
+              id="labelMode"
               style={{ width: '18px', height: '18px', cursor: 'pointer' }}
             />
-            <label htmlFor="showTitle" style={{ fontSize: '14px', color: theme.text, cursor: 'pointer' }}>
-              タイトルバーを表示する
+            <label htmlFor="labelMode" style={{ fontSize: '14px', color: theme.text, cursor: 'pointer' }}>
+              最小化時にタイトルを表示する
             </label>
           </div>
 

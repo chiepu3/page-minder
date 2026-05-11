@@ -171,7 +171,7 @@ export const IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 export const IMAGE_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 /** IndexedDB画像のURLプロトコル（Markdown内での参照用） */
-export const MEMO_IMG_PROTOCOL = 'pageminder-img://';
+export const MEMO_IMG_PROTOCOL = 'memo-img://';
 
 /** 孤立画像の削除猶予（次回ブラウザ起動時に削除）のストレージキー */
 export const PENDING_ORPHAN_IMAGE_KEY = '_pendingOrphanImageDeletion';

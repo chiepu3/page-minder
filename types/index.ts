@@ -25,7 +25,7 @@ export interface Memo {
 
     // 状態
     minimized: boolean;                  // 最小化状態
-    showTitle?: boolean;                 // タイトルバーを表示するか（デフォルト: true）
+    labelMode?: boolean;                 // 最小化時にアイコン+タイトルを表示
 
     // アクティブ化設定（optional）
     activation?: ActivationConfig;
