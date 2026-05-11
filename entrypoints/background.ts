@@ -6,7 +6,7 @@ import type { Memo } from '@/types';
 import { storage } from '@/lib/storage';
 import { matchAnyUrlPattern } from '@/lib/url-matcher';
 import { DEFAULT_SETTINGS, DEFAULT_MEMO_SIZE, PENDING_ORPHAN_IMAGE_KEY } from '@/lib/constants';
-import { getOrphanImageIds, deleteImages } from '@/lib/image-storage';
+import { saveImage, getImage, getOrphanImageIds, deleteImages } from '@/lib/image-storage';
 import { extractImageIds } from '@/lib/image-utils';
 
 const CONTEXT_MENU_ID = 'pageminder-create-memo';
@@ -88,6 +88,25 @@ export default defineBackground(() => {
 
   // 起動時に孤立画像をクリーンアップ（前回セッションの孤立画像を削除）
   cleanupOrphanImages();
+
+  browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message.type === 'IMAGE_GET') {
+      getImage(message.id as string).then(blob => {
+        if (!blob) { sendResponse(null); return; }
+        blob.arrayBuffer().then(buffer => sendResponse({ buffer, mimeType: blob.type }));
+      });
+      return true;
+    }
+    if (message.type === 'IMAGE_SAVE') {
+      const blob = new Blob([message.buffer as ArrayBuffer], { type: message.mimeType as string });
+      saveImage(blob, message.mimeType as string).then(id => sendResponse({ id }));
+      return true;
+    }
+    if (message.type === 'IMAGE_DELETE_MANY') {
+      deleteImages(message.ids as string[]).then(() => sendResponse({ ok: true }));
+      return true;
+    }
+  });
 
   // ==========================================================================
   // SPA対応: URL変更検知

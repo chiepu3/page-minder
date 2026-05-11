@@ -8,7 +8,7 @@ import { tags } from '@lezer/highlight';
 import { oneDark } from '@codemirror/theme-one-dark';
 import type { GlobalSettings } from '@/types';
 import { resizeAndConvertToWebP, isImageFile, validateImageSize } from '@/lib/image-utils';
-import { saveImage } from '@/lib/image-storage';
+import { saveImage } from '@/lib/image-storage-proxy';
 import { MEMO_IMG_PROTOCOL } from '@/lib/constants';
 
 interface MemoEditorProps {

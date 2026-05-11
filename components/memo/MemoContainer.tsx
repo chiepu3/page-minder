@@ -12,7 +12,7 @@ import { matchAnyUrlPattern } from '@/lib/url-matcher';
 import { logger } from '@/lib/logger';
 import { useUrlWatcher } from '@/hooks/useUrlWatcher';
 import { useActivation } from '@/hooks/useActivation';
-import { deleteImages } from '@/lib/image-storage';
+import { deleteImages } from '@/lib/image-storage-proxy';
 import { extractImageIds } from '@/lib/image-utils';
 
 import { DEFAULT_SETTINGS } from '@/lib/constants';
@@ -66,6 +66,16 @@ export function MemoContainer() {
     },
     settings,
   });
+
+  useEffect(() => {
+    activatedMemos.forEach((_, memoId) => {
+      const memo = memos.find(m => m.id === memoId);
+      if (memo && !memo.activation?.enabled) {
+        forceDeactivateMemo(memoId);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memos]);
 
   // メモ読み込み関数（URL変更時にも呼ばれる）
   const loadMemos = useCallback(async () => {

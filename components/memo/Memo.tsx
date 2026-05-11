@@ -12,7 +12,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { useDraggable } from '@/hooks/useDraggable';
 import { useResizable } from '@/hooks/useResizable';
 import { IconStickyNote, IconMinimize } from '@/components/icons';
-import { getImage } from '@/lib/image-storage';
+import { getImage } from '@/lib/image-storage-proxy';
 import { extractImageIds } from '@/lib/image-utils';
 import {
   DEFAULT_MEMO_SIZE,
