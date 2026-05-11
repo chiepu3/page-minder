@@ -67,6 +67,16 @@ export function MemoContainer() {
     settings,
   });
 
+  useEffect(() => {
+    activatedMemos.forEach((_, memoId) => {
+      const memo = memos.find(m => m.id === memoId);
+      if (memo && !memo.activation?.enabled) {
+        forceDeactivateMemo(memoId);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memos]);
+
   // メモ読み込み関数（URL変更時にも呼ばれる）
   const loadMemos = useCallback(async () => {
     try {
