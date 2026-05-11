@@ -542,38 +542,6 @@ function ActivationOverlayComponent({
                     }
                 }}
             >
-                {/* manual非表示条件の場合に×ボタンを表示 */}
-                {config.hideCondition === 'manual' && (
-                    <button
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onClose();
-                        }}
-                        style={{
-                            position: 'absolute',
-                            top: '-10px',
-                            right: '-10px',
-                            width: '22px',
-                            height: '22px',
-                            borderRadius: '50%',
-                            border: 'none',
-                            backgroundColor: '#555',
-                            color: '#fff',
-                            fontSize: '13px',
-                            lineHeight: '1',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            zIndex: 1,
-                            boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-                        }}
-                        title="閉じる"
-                    >
-                        ×
-                    </button>
-                )}
                 <MemoComponent
                     memo={memo}
                     settings={settings}
@@ -586,6 +554,7 @@ function ActivationOverlayComponent({
                     isActivated={true}
                     onPauseActivation={onPauseActivation}
                     onResumeActivation={onResumeActivation}
+                    onCloseActivation={onClose}
                 />
             </div>
         </>

@@ -55,10 +55,13 @@ export function useActivation(
                     // トリガー要素がクリックパスに含まれるか
                     const clickedTrigger = composedPath.includes(state.triggerElement);
                     // Shadow DOM内のactivation-overlay（data-memo-id属性）がクリックパスに含まれるか
-                    const clickedMemo = composedPath.some(
-                        el => (el as Element)?.getAttribute?.('data-memo-id') === memoId
-                            || (el as Element)?.closest?.('[data-memo-id="' + memoId + '"]') !== null
-                    );
+                    // 注意: text nodeなど非Elementノードに.closest/.getAttributeは存在しない。
+                    // undefined !== null → true になるので instanceof Element で先にフィルタする。
+                    const clickedMemo = composedPath.some(el => {
+                        if (!(el instanceof Element)) return false;
+                        return el.getAttribute('data-memo-id') === memoId
+                            || el.closest('[data-memo-id="' + memoId + '"]') !== null;
+                    });
 
                     if (!clickedTrigger && !clickedMemo) {
                         deactivateMemoInternal(memoId);
@@ -284,9 +287,10 @@ export function useActivation(
                 }
 
                 // 既にアクティブなら非表示（トグル動作）
-                // ただし、一時停止中（設定画面など）は無視して常に表示維持
+                // ただし click-outside 条件の場合はトリガー再クリックでは閉じない
+                // （click-outside 側のハンドラに任せる）
                 if (activeStatesRef.current.has(memo.id)) {
-                    if (!pausedStatesRef.current.has(memo.id)) {
+                    if (config.hideCondition !== 'click-outside' && !pausedStatesRef.current.has(memo.id)) {
                         deactivateMemoInternal(memo.id);
                     }
                 } else {

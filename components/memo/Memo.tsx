@@ -42,6 +42,8 @@ interface MemoProps {
   onPauseActivation?: (reason: string) => void;
   /** アクティブ化の一時停止解除 */
   onResumeActivation?: (reason: string) => void;
+  /** アクティブ化を手動で閉じる（manual条件時に×ボタンとして使用） */
+  onCloseActivation?: () => void;
   /** 同じページにマッチする他のメモのURLパターン */
   existingPatterns?: import('@/types').UrlPattern[];
 }
@@ -49,7 +51,7 @@ interface MemoProps {
 /**
  * 個別メモコンポーネント
  */
-export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, onStartElementPicker, shouldOpenSettings, onSettingsOpened, onPauseActivation, onResumeActivation, existingPatterns = [] }: MemoProps) {
+export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, onStartElementPicker, shouldOpenSettings, onSettingsOpened, onPauseActivation, onResumeActivation, onCloseActivation, existingPatterns = [] }: MemoProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -593,6 +595,31 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
           >
             <IconMinimize size={18} color={memoTextColor} />
           </button>
+          {isActivated && memo.activation?.hideCondition === 'manual' && onCloseActivation && (
+            <button
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                opacity: 0.6,
+                padding: '2px',
+                marginLeft: '2px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                fontSize: '16px',
+                lineHeight: 1,
+                color: memoTextColor,
+              }}
+              onClick={(e) => { e.stopPropagation(); onCloseActivation(); }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
+              title="閉じる"
+            >
+              ×
+            </button>
+          )}
         </div>
 
         {/* コンテンツエリア */}
