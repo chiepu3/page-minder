@@ -589,6 +589,7 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
               justifyContent: 'center',
               flexShrink: 0,
             }}
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={toggleMinimize}
             onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
             onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
@@ -608,10 +609,13 @@ export function Memo({ memo, settings, onUpdate, onDelete, isActivated = false, 
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
-                fontSize: '16px',
+                width: '18px',
+                height: '18px',
+                fontSize: '14px',
                 lineHeight: 1,
                 color: memoTextColor,
               }}
+              onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); onCloseActivation(); }}
               onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
               onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
