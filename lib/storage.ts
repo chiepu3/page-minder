@@ -2,6 +2,7 @@
 // PageMinder - Storage Utility
 // =============================================================================
 
+import { browser } from 'wxt/browser';
 import type { Memo, GlobalSettings, StorageSchema, UrlPattern, StorageKey } from '@/types';
 import { DEFAULT_SETTINGS } from './constants';
 import { logger } from './logger';
@@ -11,7 +12,7 @@ import { logger } from './logger';
 // -----------------------------------------------------------------------------
 
 /**
- * chrome.storage.local のラッパークラス
+ * browser.storage.local のラッパークラス
  */
 class Storage {
     // パフォーマンス最適化: 保留中の書き込みをバッファリング
@@ -26,7 +27,7 @@ class Storage {
         key: K
     ): Promise<StorageSchema[K] | undefined> {
         try {
-            const result = await chrome.storage.local.get(key);
+            const result = await browser.storage.local.get(key);
             return result[key] as StorageSchema[K] | undefined;
         } catch (error) {
             logger.error('Storage get failed', { key, error: String(error) });
@@ -42,7 +43,7 @@ class Storage {
         value: StorageSchema[K]
     ): Promise<void> {
         try {
-            await chrome.storage.local.set({ [key]: value });
+            await browser.storage.local.set({ [key]: value });
             logger.debug('Storage set', { key });
         } catch (error) {
             logger.error('Storage set failed', { key, error: String(error) });
@@ -296,7 +297,7 @@ class Storage {
      * 全データをクリア
      */
     async clear(): Promise<void> {
-        await chrome.storage.local.clear();
+        await browser.storage.local.clear();
         logger.warn('All storage cleared');
     }
 }

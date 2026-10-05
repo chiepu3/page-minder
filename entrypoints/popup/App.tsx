@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { useEffect, useState, useCallback } from 'react';
+import { browser } from 'wxt/browser';
 import type { Memo, GlobalSettings } from '@/types';
 import { storage } from '@/lib/storage';
 import { matchAnyUrlPattern } from '@/lib/url-matcher';
@@ -34,7 +35,7 @@ function App() {
                 }
 
                 // 現在のタブURLを取得
-                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
                 const url = tab?.url || '';
                 setCurrentUrl(url);
 
@@ -70,10 +71,10 @@ function App() {
         }
 
         // 全タブのContent Scriptに通知
-        const tabs = await chrome.tabs.query({});
+        const tabs = await browser.tabs.query({});
         tabs.forEach(tab => {
             if (tab.id) {
-                chrome.tabs.sendMessage(tab.id, {
+                browser.tabs.sendMessage(tab.id, {
                     action: 'SAVE_SETTINGS',
                     payload: newSettings
                 }).catch(() => {});
@@ -122,9 +123,9 @@ function App() {
 
             // Content Scriptにメモ追加を通知
             try {
-                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
                 if (tab?.id) {
-                    await chrome.tabs.sendMessage(tab.id, {
+                    await browser.tabs.sendMessage(tab.id, {
                         action: 'CREATE_MEMO',
                         payload: newMemo,
                     });
@@ -141,9 +142,9 @@ function App() {
     // メモへジャンプ
     const handleJump = useCallback(async (memoId: string) => {
         try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
             if (tab?.id) {
-                await chrome.tabs.sendMessage(tab.id, {
+                await browser.tabs.sendMessage(tab.id, {
                     action: 'SCROLL_TO_MEMO',
                     payload: { memoId },
                 });
@@ -157,9 +158,9 @@ function App() {
     // メモを左上に呼び出す
     const handleRecall = useCallback(async (memoId: string) => {
         try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
             if (tab?.id) {
-                await chrome.tabs.sendMessage(tab.id, {
+                await browser.tabs.sendMessage(tab.id, {
                     action: 'MOVE_MEMO_TO_VISIBLE',
                     payload: { memoId },
                 });
@@ -173,9 +174,9 @@ function App() {
     // メモの設定を開く
     const handleOpenSettings = useCallback(async (memoId: string) => {
         try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
             if (tab?.id) {
-                await chrome.tabs.sendMessage(tab.id, {
+                await browser.tabs.sendMessage(tab.id, {
                     action: 'OPEN_MEMO_SETTINGS',
                     payload: { memoId },
                 });
@@ -187,7 +188,7 @@ function App() {
     }, []);
 
     const handleOpenGlobalSettings = useCallback(() => {
-        chrome.runtime.openOptionsPage();
+        browser.runtime.openOptionsPage();
     }, []);
 
     // メモ削除
@@ -198,9 +199,9 @@ function App() {
 
             // Content Scriptに削除を通知
             try {
-                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
                 if (tab?.id) {
-                    await chrome.tabs.sendMessage(tab.id, {
+                    await browser.tabs.sendMessage(tab.id, {
                         action: 'DELETE_MEMO',
                         payload: { memoId },
                     });
@@ -228,7 +229,7 @@ function App() {
             const newAllMemos = [...reorderedMemos, ...otherMemos];
             
             // ストレージを更新（全メモを上書き）
-            await chrome.storage.local.set({ memos: newAllMemos });
+            await browser.storage.local.set({ memos: newAllMemos });
         } catch (err) {
             console.error('Failed to save memo order:', err);
         }
