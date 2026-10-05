@@ -2,6 +2,7 @@
 // PageMinder - Background Script
 // =============================================================================
 
+import { browser } from 'wxt/browser';
 import type { Memo } from '@/types';
 import { storage } from '@/lib/storage';
 import { matchAnyUrlPattern } from '@/lib/url-matcher';
@@ -65,7 +66,9 @@ async function cleanupOrphanImages(): Promise<void> {
     }
 
     // 前回セッションで記録した孤立IDを取得
-    const stored = await chrome.storage.local.get(PENDING_ORPHAN_IMAGE_KEY);
+    const stored = await browser.storage.local.get<{ [PENDING_ORPHAN_IMAGE_KEY]?: string[] }>(
+      PENDING_ORPHAN_IMAGE_KEY
+    );
     const prevOrphans: string[] = stored[PENDING_ORPHAN_IMAGE_KEY] ?? [];
 
     // 今回も孤立しているものだけ削除（ブラウザ再起動をまたいで2回孤立で削除）
@@ -77,7 +80,7 @@ async function cleanupOrphanImages(): Promise<void> {
 
     // 今回の孤立IDを記録（次回起動時に削除対象となる）
     const currentOrphans = await getOrphanImageIds(usedIds);
-    await chrome.storage.local.set({ [PENDING_ORPHAN_IMAGE_KEY]: currentOrphans });
+    await browser.storage.local.set({ [PENDING_ORPHAN_IMAGE_KEY]: currentOrphans });
   } catch (error) {
     console.error('PageMinder: Image cleanup failed', error);
   }
