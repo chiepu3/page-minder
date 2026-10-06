@@ -524,15 +524,13 @@ export function SettingsModal({ memo, settings, onUpdate, onClose, onStartElemen
                   {/* hover時の遅延 */}
                   {activation.trigger === 'hover' && (
                     <div style={sectionStyle}>
-                      <label style={labelStyle}>表示遅延 (ms)</label>
-                      <input
-                        type="number"
-                        value={activation.delay ?? 500}
-                        onChange={(e) => setActivation({ ...activation, delay: parseInt(e.target.value) || 500 })}
-                        style={{ ...inputStyle, width: '120px' }}
-                        min={0}
-                        step={100}
-                      />
+                      <div style={labelStyle}>表示遅延（全体設定）</div>
+                      <p style={{ margin: '4px 0', color: theme.text, fontSize: '14px' }}>
+                        現在の設定: {settings.activationShowDelay ?? 500} ms
+                      </p>
+                      <p style={{ margin: '4px 0', color: theme.textSecondary, fontSize: '12px' }}>
+                        全メモ共通です。全体設定の「アクティブ化設定」で変更できます。
+                      </p>
                     </div>
                   )}
 
