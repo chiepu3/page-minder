@@ -15,9 +15,32 @@ import { logger } from './logger';
  */
 class Storage {
     // パフォーマンス最適化: 保留中の書き込みをバッファリング
-    private pendingWrites = new Map<string, Memo>();
+    private pendingWrites = new Map<string, { memo: Memo; generation: number }>();
+    private memoGenerations = new Map<string, number>();
     private writeTimeout: ReturnType<typeof setTimeout> | null = null;
     private readonly WRITE_DEBOUNCE_MS = 500;
+    private memoWriteQueue: Promise<void> = Promise.resolve();
+
+    /** 同じインスタンス内の保存と削除を呼び出し順に処理する。 */
+    private enqueueMemoWrite(write: () => Promise<void>): Promise<void> {
+        const result = this.memoWriteQueue.then(write);
+        // 失敗は呼び出し元へ返し、次の操作の実行は妨げない。
+        this.memoWriteQueue = result.catch(() => undefined);
+        return result;
+    }
+
+    private cancelPendingMemoWrite(memoId: string): void {
+        this.pendingWrites.delete(memoId);
+        if (this.pendingWrites.size === 0 && this.writeTimeout !== null) {
+            clearTimeout(this.writeTimeout);
+            this.writeTimeout = null;
+        }
+    }
+
+    private cancelDeletedMemoWrites(memoId: string): void {
+        this.memoGenerations.set(memoId, (this.memoGenerations.get(memoId) ?? 0) + 1);
+        this.cancelPendingMemoWrite(memoId);
+    }
 
     /**
      * 指定キーの値を取得
@@ -87,13 +110,16 @@ class Storage {
     async saveMemo(memo: Memo, options?: { immediate?: boolean }): Promise<void> {
         if (options?.immediate) {
             // 保留中の同じメモの書き込みをキャンセル
-            this.pendingWrites.delete(memo.id);
-            await this.saveMemoInternal(memo);
+            this.cancelPendingMemoWrite(memo.id);
+            await this.enqueueMemoWrite(() => this.saveMemoInternal(memo));
             return;
         }
 
         // デバウンス処理: 保留リストに追加
-        this.pendingWrites.set(memo.id, memo);
+        this.pendingWrites.set(memo.id, {
+            memo,
+            generation: this.memoGenerations.get(memo.id) ?? 0,
+        });
 
         // デバウンスタイマーをセット
         if (!this.writeTimeout) {
@@ -114,29 +140,34 @@ class Storage {
      */
     private async flushWrites(): Promise<void> {
         this.writeTimeout = null;
-
         if (this.pendingWrites.size === 0) return;
 
-        // 保留中の全メモを取得してクリア
-        const memosToWrite = Array.from(this.pendingWrites.values());
+        // 予約時点のバッチを固定し、後から来た編集を取り込まない。
+        const writes = Array.from(this.pendingWrites.values());
         this.pendingWrites.clear();
 
-        // 現在のメモ一覧を取得
-        const existingMemos = await this.getMemos();
-        const memoMap = new Map(existingMemos.map(m => [m.id, m]));
-        const now = new Date().toISOString();
+        await this.enqueueMemoWrite(async () => {
+            // 先行する削除により無効になった予約だけを除外する。
+            const memosToWrite = writes
+                .filter(write => write.generation === (this.memoGenerations.get(write.memo.id) ?? 0))
+                .map(write => write.memo);
+            if (memosToWrite.length === 0) return;
 
-        // バッチ更新
-        for (const memo of memosToWrite) {
-            if (memoMap.has(memo.id)) {
-                memoMap.set(memo.id, { ...memo, updatedAt: now });
-            } else {
-                memoMap.set(memo.id, { ...memo, createdAt: now, updatedAt: now });
+            const existingMemos = await this.getMemos();
+            const memoMap = new Map(existingMemos.map(m => [m.id, m]));
+            const now = new Date().toISOString();
+
+            for (const memo of memosToWrite) {
+                if (memoMap.has(memo.id)) {
+                    memoMap.set(memo.id, { ...memo, updatedAt: now });
+                } else {
+                    memoMap.set(memo.id, { ...memo, createdAt: now, updatedAt: now });
+                }
             }
-        }
 
-        await this.set('memos', Array.from(memoMap.values()));
-        logger.info('Memos batch saved', { count: memosToWrite.length });
+            await this.set('memos', Array.from(memoMap.values()));
+            logger.info('Memos batch saved', { count: memosToWrite.length });
+        });
     }
 
     /**
@@ -168,16 +199,21 @@ class Storage {
      * メモを削除
      */
     async deleteMemo(memoId: string): Promise<void> {
-        const memos = await this.getMemos();
-        const filtered = memos.filter((m) => m.id !== memoId);
+        await this.enqueueMemoWrite(async () => {
+            const memos = await this.getMemos();
+            const filtered = memos.filter((m) => m.id !== memoId);
 
-        if (filtered.length === memos.length) {
-            logger.warn('Memo not found for deletion', { memoId });
-            return;
-        }
+            if (filtered.length === memos.length) {
+                this.cancelDeletedMemoWrites(memoId);
+                logger.warn('Memo not found for deletion', { memoId });
+                return;
+            }
 
-        await this.set('memos', filtered);
-        logger.info('Memo deleted', { memoId });
+            await this.set('memos', filtered);
+            // 削除成功後に取り消す。失敗時は未保存の編集を残す。
+            this.cancelDeletedMemoWrites(memoId);
+            logger.info('Memo deleted', { memoId });
+        });
     }
 
     /**
