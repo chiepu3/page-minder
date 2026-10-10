@@ -109,9 +109,14 @@ class Storage {
      */
     async saveMemo(memo: Memo, options?: { immediate?: boolean }): Promise<void> {
         if (options?.immediate) {
+            const generation = this.memoGenerations.get(memo.id) ?? 0;
             // 保留中の同じメモの書き込みをキャンセル
             this.cancelPendingMemoWrite(memo.id);
-            await this.enqueueMemoWrite(() => this.saveMemoInternal(memo));
+            await this.enqueueMemoWrite(async () => {
+                // 削除完了を待つ間に届いた古い編集も、バッチと同じ世代で無効化する。
+                if (generation !== (this.memoGenerations.get(memo.id) ?? 0)) return;
+                await this.saveMemoInternal(memo);
+            });
             return;
         }
 

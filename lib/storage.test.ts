@@ -116,6 +116,46 @@ describe('pending write after deletion', () => {
         expect(stored.memos).toEqual([]);
     });
 
+    it('invalidates an immediate edit requested while deletion is still in flight', async () => {
+        const { storage } = await import('./storage');
+        const finishRead = pauseNextRead();
+        const deletion = storage.deleteMemo(memo.id);
+        await vi.advanceTimersByTimeAsync(0);
+        const saving = storage.saveMemo({ ...memo, content: 'Stale edit during deletion' }, { immediate: true });
+        finishRead();
+        await Promise.all([deletion, saving]);
+        expect(stored.memos).toEqual([]);
+    });
+
+    it('invalidates an immediate edit queued behind deletion of an unpersisted memo', async () => {
+        const { storage } = await import('./storage');
+        stored.memos = [];
+        const deletion = storage.deleteMemo(memo.id);
+        const saving = storage.saveMemo(memo, { immediate: true });
+        await Promise.all([deletion, saving]);
+        expect(stored.memos).toEqual([]);
+    });
+
+    it('keeps an immediate edit queued behind a failed deletion', async () => {
+        const { storage } = await import('./storage');
+        chromeApi.storage.local.set.mockRejectedValueOnce(new Error('Synthetic deletion failure'));
+        const finishRead = pauseNextRead();
+        const deletion = storage.deleteMemo(memo.id);
+        const failure = expect(deletion).rejects.toThrow('Synthetic deletion failure');
+        await vi.advanceTimersByTimeAsync(0);
+        const saving = storage.saveMemo({ ...memo, content: 'Edit survives failed deletion' }, { immediate: true });
+        finishRead();
+        await Promise.all([failure, saving]);
+        expect(stored.memos[0].content).toBe('Edit survives failed deletion');
+    });
+
+    it('allows an explicit immediate save after deletion has completed', async () => {
+        const { storage } = await import('./storage');
+        await storage.deleteMemo(memo.id);
+        await storage.saveMemo({ ...memo, content: 'Intentional immediate recreation' }, { immediate: true });
+        expect(stored.memos[0].content).toBe('Intentional immediate recreation');
+    });
+
     it('does not recreate a deleted memo when its drag-save timer fires', async () => {
         const { storage } = await import('./storage');
         await storage.saveMemo({ ...memo, positions: { demo: { x: 10, y: 20, width: 300, height: 200, pinned: false } } });
