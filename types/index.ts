@@ -105,7 +105,8 @@ export interface ActivationConfig {
     enabled: boolean;
     trigger: ActivationTrigger;
     selector: string;                    // CSSセレクタ
-    delay?: number;                      // hover時の遅延（ms）、デフォルト: 500
+    /** @deprecated 旧形式との互換用。実際の表示遅延はGlobalSettings.activationShowDelayを使用。 */
+    delay?: number;
 
     // 表示位置
     positionMode: PositionMode;
