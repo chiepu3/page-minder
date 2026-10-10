@@ -4,7 +4,12 @@
 
 import { useState, useEffect } from 'react';
 import type { GlobalSettings, LogLevel } from '@/types';
-import { COLOR_PALETTE } from '@/lib/constants';
+import { COLOR_PALETTE, DEFAULT_SETTINGS } from '@/lib/constants';
+
+function parseTimingValue(value: string, fallback: number): number {
+    const parsed = parseInt(value, 10);
+    return Number.isNaN(parsed) ? fallback : parsed;
+}
 
 interface SettingsPanelProps {
     settings: GlobalSettings;
@@ -161,6 +166,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps) {
                         <input
                             type="number"
                             className="settings-number"
+                            aria-label="表示遅延"
                             value={localSettings.activationShowDelay}
                             min={0}
                             max={2000}
@@ -168,7 +174,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps) {
                             onChange={(e) =>
                                 updateSetting(
                                     'activationShowDelay',
-                                    parseInt(e.target.value, 10) || 500
+                                    parseTimingValue(e.target.value, DEFAULT_SETTINGS.activationShowDelay)
                                 )
                             }
                         />
@@ -187,6 +193,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps) {
                         <input
                             type="number"
                             className="settings-number"
+                            aria-label="非表示猶予時間"
                             value={localSettings.activationHideGracePeriod}
                             min={0}
                             max={2000}
@@ -194,7 +201,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps) {
                             onChange={(e) =>
                                 updateSetting(
                                     'activationHideGracePeriod',
-                                    parseInt(e.target.value, 10) || 300
+                                    parseTimingValue(e.target.value, DEFAULT_SETTINGS.activationHideGracePeriod)
                                 )
                             }
                         />

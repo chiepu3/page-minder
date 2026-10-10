@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { useState, useEffect, useCallback } from 'react';
+import { browser, type Browser } from 'wxt/browser';
 import { Memo as MemoType, Message } from '@/types';
 import { Memo } from './Memo';
 import { ElementPicker } from './ElementPicker';
@@ -119,7 +120,7 @@ export function MemoContainer() {
   useEffect(() => {
     const handleMessage = (
       message: Message,
-      _sender: chrome.runtime.MessageSender,
+      _sender: Browser.runtime.MessageSender,
       sendResponse: (response: unknown) => void
     ) => {
       logger.debug('Message received', { action: message.action });
@@ -222,9 +223,9 @@ export function MemoContainer() {
       return true;
     };
 
-    chrome.runtime.onMessage.addListener(handleMessage);
+    browser.runtime.onMessage.addListener(handleMessage);
     return () => {
-      chrome.runtime.onMessage.removeListener(handleMessage);
+      browser.runtime.onMessage.removeListener(handleMessage);
     };
   }, [memos]);
 

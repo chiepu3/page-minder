@@ -34,8 +34,8 @@ export function useActivation(
     // MutationObserver用のref
     const observerRef = useRef<MutationObserver | null>(null);
     const rescanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    // 既にイベントリスナーを設定した要素を追跡（重複登録防止）
-    const registeredElementsRef = useRef<WeakSet<Element>>(new WeakSet());
+    // 要素ごとに全メモの登録キーを追跡。同じ要素を複数メモが共有しても上書きしない。
+    const registeredElementsRef = useRef<WeakMap<Element, Set<string>>>(new WeakMap());
 
     // IntersectionObserverでトリガー要素の可視性を監視
     const intersectionObserverRef = useRef<IntersectionObserver | null>(null);
@@ -192,10 +192,18 @@ export function useActivation(
     const setupListenersForElement = useCallback((memo: Memo, element: Element, config: ActivationConfig) => {
         // 既に登録済みならスキップ
         const elementKey = `${memo.id}:${config.selector}`;
-        if ((element as any).__pageminder_registered === elementKey) {
+        const registeredKeys = registeredElementsRef.current.get(element) ?? new Set<string>();
+        if (registeredKeys.has(elementKey)) {
             return;
         }
-        (element as any).__pageminder_registered = elementKey;
+        registeredKeys.add(elementKey);
+        registeredElementsRef.current.set(element, registeredKeys);
+        cleanupFunctionsRef.current.push(() => {
+            registeredKeys.delete(elementKey);
+            if (registeredKeys.size === 0) {
+                registeredElementsRef.current.delete(element);
+            }
+        });
 
         logger.debug('Setting up listeners for element', {
             memoId: memo.id,
@@ -260,7 +268,6 @@ export function useActivation(
                 element.removeEventListener('mouseenter', handleMouseEnter);
                 element.removeEventListener('mouseleave', handleMouseLeave);
                 if (hoverTimeoutId) clearTimeout(hoverTimeoutId);
-                delete (element as any).__pageminder_registered;
             });
         }
 
@@ -312,7 +319,6 @@ export function useActivation(
                 element.removeEventListener('click', handleClick, true);
                 element.removeEventListener('mouseenter', handleMouseEnter);
                 element.removeEventListener('mouseleave', handleMouseLeave);
-                delete (element as any).__pageminder_registered;
             });
         }
 
@@ -347,7 +353,6 @@ export function useActivation(
             cleanupFunctionsRef.current.push(() => {
                 element.removeEventListener('focusin', handleFocusIn);
                 element.removeEventListener('focusout', handleFocusOut);
-                delete (element as any).__pageminder_registered;
             });
         }
     }, []);
@@ -379,7 +384,7 @@ export function useActivation(
                     for (const memo of memos) {
                         const config = memo.activation!;
                         const elementKey = `${memo.id}:${selector}`;
-                        if ((element as any).__pageminder_registered !== elementKey) {
+                        if (!registeredElementsRef.current.get(element)?.has(elementKey)) {
                             newElementsFound++;
                             setupListenersForElement(memo, element, config);
                         }
@@ -410,7 +415,7 @@ export function useActivation(
                         for (const memo of memos) {
                             const config = memo.activation!;
                             const elementKey = `${memo.id}:${selector}`;
-                            if ((node as any).__pageminder_registered !== elementKey) {
+                            if (!registeredElementsRef.current.get(node)?.has(elementKey)) {
                                 newElementsFound++;
                                 setupListenersForElement(memo, node, config);
                             }
@@ -427,7 +432,7 @@ export function useActivation(
                         for (const memo of memos) {
                             const config = memo.activation!;
                             const elementKey = `${memo.id}:${selector}`;
-                            if ((el as any).__pageminder_registered !== elementKey) {
+                            if (!registeredElementsRef.current.get(el)?.has(elementKey)) {
                                 newElementsFound++;
                                 setupListenersForElement(memo, el, config);
                             }
